@@ -57,7 +57,7 @@ public class BlockChain {
 	
 	static MessageDigest encoder;
 
-	private static void main (String [] args) {
+	public static void main (String [] args) {
 
 		//TODO: Instantiate variables
 		try {
