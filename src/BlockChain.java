@@ -29,13 +29,18 @@ All acceptable commands are displayed on the various consoles.
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.security.*;
+import java.io.PrintStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Random;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 /**
  * @author klee8
  * Data block to be solved
  */
-class DataBlock {
+class DataBlock{
 	//Properties
 	private String startHash;
 	private String data;
@@ -57,7 +62,7 @@ class DataBlock {
 	public void setData(String data) {this.data = data;}
 	
 	public String getRandomSeed() {return randomSeed;}
-	public void setRandomSeed(String randomSeed) {this.randomSeed = randomSeed;}
+	public void setRandomSeed(String randomString) {this.randomSeed = randomString;}
 	
 	public String getEndHash() {return endHash;}
 	public void setEndHash(String endHash) {this.endHash = endHash;}
@@ -81,32 +86,52 @@ class DataBlock {
 
 /**
  * @author klee8
- *
+ * Process state class that holds all the current process state values and constants.
+ * Used as a reference by all functions to check in and update shared resources.
+ */
+class ProcessState{
+	public static String hashType = "SHA-256";
+	public static int passPhrase = 1000;
+	public static int unverifiedPort = 4710;
+	public static int blockChainPort = 4930;
+	private Boolean solving = false;	
+	private int currentBlock = 0;
+	
+	//Constructors
+	public ProcessState(Boolean solving, int currentBlock) {
+		super();
+		this.solving = solving;
+		this.currentBlock = currentBlock;
+	}
+	public ProcessState() {
+		super();
+	}
+
+	//Getters and Setters
+	public boolean getSolving() {return solving;}
+	public void setSolving(Boolean solving) {this.solving = solving;}
+	
+	public int getCurrentBlock() {return currentBlock;}
+	public void setCurrentBlock(int currentBlock) {this.currentBlock = currentBlock;}
+	
+}
+
+/**
+ * @author klee8
+ * Beginning of Block chain program spawns secondary processes and maintains queue for 
  */
 public class BlockChain {
-	
-	//Statics
-	private static String hashType = "SHA-256";
 
 	//Properties
 	Boolean solved = false;
 	
 	public static void main (String [] args) {
 		
-		//Run the process
-		new BlockChain().run(args);
-
-	}
-	
-	void run(String [] args) {
-		
-		//TODO: Instantiate variables
+		int numPorts = 3;
 		int port = 0;
-		int unverifiedPort = 4710;
-		int blockChainPort = 4930;
-		int keyPort = 4710;
 		String input = "";
-		
+		DataBlock block;
+		String startHash = "000000000000";
 		BufferedReader inStream =  new BufferedReader(new InputStreamReader(System.in));
 		
 		//Parse Arguments
@@ -123,46 +148,77 @@ public class BlockChain {
 	    }
 		
 		//Mutate ports
-		unverifiedPort += port;
-		blockChainPort += port;
-		keyPort += port;
+		int unverifiedPort = ProcessState.unverifiedPort + port;
+		int blockChainPort = ProcessState.blockChainPort + port;
 		
 		//Splash Screen
 		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
 		System.out.println("Running as process #" + port );
 		
 		//TODO: Spawn secondary processes Threads.
+		new SolutionListener(blockChainPort, numPorts).start();
+		new RequestListener(unverifiedPort, numPorts).start();
 		
+		//UI Loop
+		while (true) {
+			//Prompt user for data.
+			System.out.println("Please input a new phrase to commit to the block chain or QUIT to end the program.");
+			System.out.print("Input: ");
+			
+			//Read in data to be encoded.
+			try {
+				input = inStream.readLine();
+			} catch (IOException e) {
+				System.out.println("Error occured reading input See below:");
+				e.printStackTrace();
+			}
+			
+			//Break loop on quit command.
+			if (input.toUpperCase().equals("QUIT")) break;
+			
+			//Build the data block
+			block = new DataBlock(startHash, input);
+			
+			//TODO: Verify digital signature.
+			
+			
+			//Stringify block to JSON
+			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+			String jsonString = gson.toJson(block);
+			
+			//Contact ports to start solving process
+			contactPorts(unverifiedPort,0,0, jsonString);
 		
-		do {
-		//Prompt user for data.
-		System.out.println("Please input a new phrase to commit to the block chain or QUIT to end the program.");
-		
-		//Read in data to be encoded.
-		try {
-			input = inStream.readLine();
-		} catch (IOException e) {
-			System.out.println("Error occured reading input See below:");
-			e.printStackTrace();
 		}
 		
-		//Break loop on quit command.
-		if (input.toUpperCase().equals("QUIT")) {
-			break;
-		}
-		
-		//TODO: Verify digital signature.
-		
-		//TODO: Notify other processes to start trying to resolve hash.
-		
-		//TODO: Attempt to resolve the hash locally.
-		
-		}while (true);
-		
-		//TODO: inform other processes of signoff.
+		//TODO: inform other processes of signoff?
 		
 		//End of process
 		System.out.println("Block Chain process ended.");
+		
+	}
+	
+	private static void contactPorts(int port, int firstIndex, int secIndex, String message) {
+		
+		Socket sock;
+		PrintStream toStream;
+		
+		while (firstIndex <= secIndex) {
+			
+			//Contact all remote sockets and ask for a solution
+			try {
+				//Acquire next port
+				sock = new Socket("localhost", port + firstIndex);
+				toStream = new PrintStream(sock.getOutputStream());
+				
+				toStream.print(message);
+				
+			} catch (IOException e) {
+				System.out.println("Connection not found.");
+			}
+			
+			firstIndex++;
+		}
 		
 	}
 }
@@ -176,10 +232,12 @@ public class BlockChain {
 class SolutionListener extends Thread{
 	//Properties
 	private int port;
+	private int numPorts;
 	
-	public SolutionListener(int port) {
+	public SolutionListener(int port, int numPorts) {
 		super();
 		this.port = port;
+		this.numPorts = numPorts;
 	}
 	
 	@Override
@@ -202,23 +260,43 @@ class SolutionListener extends Thread{
  *
  */
 class RequestListener extends Thread{
+	//Static Vars
+	private static final int queueLength = 6;
+	
 	//Properties
 	private int port;
+	private int numPorts;
 	
-	public RequestListener(int port) {
+	public RequestListener(int port, int numPorts) {
 		super();
 		this.port = port;
+		this.numPorts = numPorts;
 	}
 	
 	@Override
 	public void run() {
+		Socket sock;
+		
 		System.out.println("Request Listener Thread Spawned...");
-		
+
 		//Open Port
+		try {
+			ServerSocket servsock = new ServerSocket(port, queueLength);
+			
+			//Wait for a connection and handle
+			while (true) {
+				
+				//accept new connection
+				sock = servsock.accept();
+				System.out.println("New request received");
+				
+				//TODO: already processing a request push to queue instead starting thread.
+				
+				//Spawn new process
+					
+			}
+		} catch (IOException ioe) {ioe.printStackTrace();}
 		
-		//Listen for connection.
-		
-		//Requests made to this spawn Solver threads that attempt to resolve the block
 	}
 	
 }
@@ -231,40 +309,44 @@ class RequestListener extends Thread{
  */
 class Solver extends Thread{
 	//Properties
-	private int port;
-	private MessageDigest encoder;
+	private Socket sock;
+	private int fullIndex;
 	private String hashType;
-	
-	//Constructor
-	public Solver(int port, String hashType) {
-		super();
-		this.port = port;
-		this.hashType = hashType;
-	}
+	private int passPhrase;
+	private DataBlock block;
 
+	//Constructor
+	public Solver(Socket sock, int fullIndex, String hashType, int passPhrase, DataBlock block) {
+		super();
+		this.sock = sock;
+		this.fullIndex = fullIndex;
+		this.hashType = hashType;
+		this.passPhrase = passPhrase;
+		this.block = block;
+	}
+	
 	//Methods
 	@Override
 	public void run() {
+		//variables
+		String randomString;
 		
-		//Start up encoder
-		try {
-			encoder = MessageDigest.getInstance(hashType);
-		} 
-		//If encoding variable fails immediately kill process after printing error code.
-		catch (NoSuchAlgorithmException exp) {
-			exp.printStackTrace();
-			return;
-		}
+		//Start randomizer
+		Random randomizer = new Random();
 		
 		System.out.println("Solving for New Block...");
+		//TODO: Add time to block.
 		
-		//TODO: Randomize Block Seed
+		//Randomize Block Seed
+		randomString = Integer.toHexString(randomizer.nextInt(18354124));
+		block.setRandomSeed(randomString);
 		
-		//TODO: Hash new block
+		//Hash new block.
 		
-		//TODO: Check New Hash for requirements
-	}
-	
+		//TODO: Check New Hash for requirements.
+		
+		//TODO: Inform indexed processes of discovered solution.
+	}	
 }
 
 

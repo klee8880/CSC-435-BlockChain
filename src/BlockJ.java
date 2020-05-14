@@ -425,7 +425,6 @@ public class BlockJ {
     blockRecord.setWinningHash(SHA256String); // Here we just assume the first hash is a winner. No real *work*.
 
     /* Now let's see what the JSON of the full block looks like: */
-
     Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     // Convert the Java object to a JSON String:
