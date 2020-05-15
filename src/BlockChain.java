@@ -41,6 +41,7 @@ import java.util.Random;
  * Contains signature information, starting & ending hashes, & the data to be encoded.
  */
 class DataBlock{
+	
 	//Properties
 	private String startHash;
 	private String data;
