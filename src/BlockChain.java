@@ -33,15 +33,12 @@ import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.MessageDigest;
-import java.util.Queue;
 import java.util.Random;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 /**
  * @author klee8
  * Data block to be solved
- * Contains signagure information, starting & ending hashes, & the data to be encoded.
+ * Contains signature information, starting & ending hashes, & the data to be encoded.
  */
 class DataBlock{
 	//Properties
