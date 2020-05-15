@@ -32,6 +32,8 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.MessageDigest;
+import java.util.Queue;
 import java.util.Random;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -39,6 +41,7 @@ import com.google.gson.GsonBuilder;
 /**
  * @author klee8
  * Data block to be solved
+ * Contains signagure information, starting & ending hashes, & the data to be encoded.
  */
 class DataBlock{
 	//Properties
@@ -88,31 +91,46 @@ class DataBlock{
  * @author klee8
  * Process state class that holds all the current process state values and constants.
  * Used as a reference by all functions to check in and update shared resources.
+ * Only one instance of this class can exist. Shared among threads
  */
 class ProcessState{
-	public static String hashType = "SHA-256";
-	public static int passPhrase = 1000;
-	public static int unverifiedPort = 4710;
-	public static int blockChainPort = 4930;
-	private Boolean solving = false;	
+	//Singleton
+	private static ProcessState instance = null;
+	
+	//Port Properties
+	public int portNum;
+	public int numPorts;
+	public int unverifiedPort = 4710;
+	public int blockChainPort = 4930;
+	
+	//Hashing properties
+	public String hashType = "SHA-256";
+	public int passPhrase = 1000;
+	private boolean solving = false;	
 	private int currentBlock = 0;
+	private String currentHash = "00000000000000000000";
 	
 	//Constructors
-	public ProcessState(Boolean solving, int currentBlock) {
-		super();
-		this.solving = solving;
-		this.currentBlock = currentBlock;
-	}
-	public ProcessState() {
+	private ProcessState() {
 		super();
 	}
 
+	
 	//Getters and Setters
 	public boolean getSolving() {return solving;}
 	public void setSolving(Boolean solving) {this.solving = solving;}
 	
 	public int getCurrentBlock() {return currentBlock;}
 	public void setCurrentBlock(int currentBlock) {this.currentBlock = currentBlock;}
+	
+	public String getCurrentHash() {return currentHash;}
+	public void setCurrentHash(String currentHash) {this.currentHash = currentHash;}
+
+	//Singleton requester
+	protected static ProcessState getInstance() {
+		if (instance == null) instance = new ProcessState();
+		return instance;
+	}
 	
 }
 
@@ -126,38 +144,56 @@ public class BlockChain {
 	Boolean solved = false;
 	
 	public static void main (String [] args) {
+		//Get the singleton process state shared between processes. 
+		ProcessState state = ProcessState.getInstance();
 		
-		int numPorts = 3;
-		int port = 0;
 		String input = "";
 		DataBlock block;
-		String startHash = "000000000000";
 		BufferedReader inStream =  new BufferedReader(new InputStreamReader(System.in));
 		
 		//Parse Arguments
-		if (args.length < 1) port = 0; //Leave port as 0 for default
+		//Get this ports # designation
+		if (args.length < 1) state.portNum = 0; //Leave port as 0 for default
 	    else {
 	    	try {
-	    		port = Integer.parseInt(args[0]);
+	    		state.portNum = Integer.parseInt(args[0]);
 	    	}
 	    	//If integer cannot be parsed terminate process.
 	    	catch (NumberFormatException ex) {
-	    		System.out.println("Passed arguments is not a number value... Process terminated.");
+	    		System.out.println("Passed argument 1 is not a number value... Process terminated.");
+	    		return;
+	    	}
+	    }
+		
+		//Get number of total ports
+		if (args.length < 2) state.numPorts = 3;//Default to 3 if no argument provided.		
+		else {
+	    	try {
+	    		state.numPorts = Integer.parseInt(args[0]);
+	    	}
+	    	//If integer cannot be parsed terminate process.
+	    	catch (NumberFormatException ex) {
+	    		System.out.println("Passed argument 2 is not a number value... Process terminated.");
 	    		return;
 	    	}
 	    }
 		
 		//Mutate ports
-		int unverifiedPort = ProcessState.unverifiedPort + port;
-		int blockChainPort = ProcessState.blockChainPort + port;
+		state.unverifiedPort += state.portNum;
+		state.blockChainPort += state.portNum;
 		
 		//Splash Screen
 		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
-		System.out.println("Running as process #" + port );
+		System.out.println("Running as process #" + state.portNum);
 		
-		//TODO: Spawn secondary processes Threads.
-		new SolutionListener(blockChainPort, numPorts).start();
-		new RequestListener(unverifiedPort, numPorts).start();
+		//Spawn secondary processes Threads.
+		new SolutionListener(state).start();
+		System.out.println("Solution Listener Thread Spawned...");
+		new RequestListener(state).start();
+		System.out.println("Request Listener Thread Spawned...");
+		
+		//Wait a moment
+		
 		
 		//UI Loop
 		while (true) {
@@ -176,18 +212,24 @@ public class BlockChain {
 			//Break loop on quit command.
 			if (input.toUpperCase().equals("QUIT")) break;
 			
+			//TODO: Check if there is already a block being solved
+			
 			//Build the data block
-			block = new DataBlock(startHash, input);
+			block = new DataBlock(state.getCurrentHash(), input);
 			
-			//TODO: Verify digital signature.
+			//TODO: Add Digital Signature
 			
+			//Build the request string.
+			StringBuilder request = new StringBuilder("newBlock/")
+					.append(state.getCurrentBlock()).append('/')
+					.append(block.getStartHash()).append('/')
+					.append(block.getData());
 			
-			//Stringify block to JSON
-			Gson gson = new GsonBuilder().setPrettyPrinting().create();
-			String jsonString = gson.toJson(block);
+			//TODO: REMOVE TEST PRINT
+			System.out.println(request.toString());
 			
 			//Contact ports to start solving process
-			contactPorts(unverifiedPort,0,0, jsonString);
+			contactPorts(state.unverifiedPort,0,state.numPorts, request.toString());
 		
 		}
 		
@@ -203,7 +245,7 @@ public class BlockChain {
 		Socket sock;
 		PrintStream toStream;
 		
-		while (firstIndex <= secIndex) {
+		while (firstIndex < secIndex) {
 			
 			//Contact all remote sockets and ask for a solution
 			try {
@@ -211,7 +253,8 @@ public class BlockChain {
 				sock = new Socket("localhost", port + firstIndex);
 				toStream = new PrintStream(sock.getOutputStream());
 				
-				toStream.print(message);
+				toStream.println(message);
+				toStream.flush();
 				
 			} catch (IOException e) {
 				System.out.println("Connection not found.");
@@ -231,18 +274,15 @@ public class BlockChain {
  */
 class SolutionListener extends Thread{
 	//Properties
-	private int port;
-	private int numPorts;
+	private ProcessState state;
 	
-	public SolutionListener(int port, int numPorts) {
-		super();
-		this.port = port;
-		this.numPorts = numPorts;
+	//Constructor
+	public SolutionListener(ProcessState state) {
+		this.state = state;
 	}
-	
+
 	@Override
 	public void run() {
-		System.out.println("Solution Listener Thread Spawned...");
 		
 		//Open Port
 		
@@ -254,7 +294,7 @@ class SolutionListener extends Thread{
 }
 
 
-//------SOLUTION REQUEST STRUCTURE------
+//------NEW REQUEST STRUCTURE------
 /**RequestListener
  * @author klee8
  *
@@ -264,24 +304,21 @@ class RequestListener extends Thread{
 	private static final int queueLength = 6;
 	
 	//Properties
-	private int port;
-	private int numPorts;
+	private ProcessState state;
 	
-	public RequestListener(int port, int numPorts) {
-		super();
-		this.port = port;
-		this.numPorts = numPorts;
+	//Constructor
+	public RequestListener(ProcessState state) {
+		this.state = state;
 	}
-	
+
 	@Override
 	public void run() {
 		Socket sock;
-		
-		System.out.println("Request Listener Thread Spawned...");
 
 		//Open Port
 		try {
-			ServerSocket servsock = new ServerSocket(port, queueLength);
+			@SuppressWarnings("resource")
+			ServerSocket servsock = new ServerSocket(state.unverifiedPort, queueLength);
 			
 			//Wait for a connection and handle
 			while (true) {
@@ -290,9 +327,8 @@ class RequestListener extends Thread{
 				sock = servsock.accept();
 				System.out.println("New request received");
 				
-				//TODO: already processing a request push to queue instead starting thread.
-				
 				//Spawn new process
+				new Solver(sock, state).start();
 					
 			}
 		} catch (IOException ioe) {ioe.printStackTrace();}
@@ -308,44 +344,73 @@ class RequestListener extends Thread{
  * Repeatedly randomizes the given data block until the concatenated block's hash code meets the given criteria.
  */
 class Solver extends Thread{
+	
 	//Properties
 	private Socket sock;
-	private int fullIndex;
-	private String hashType;
-	private int passPhrase;
+	private ProcessState state;
 	private DataBlock block;
-
+	
 	//Constructor
-	public Solver(Socket sock, int fullIndex, String hashType, int passPhrase, DataBlock block) {
+	public Solver(Socket sock, ProcessState state) {
 		super();
 		this.sock = sock;
-		this.fullIndex = fullIndex;
-		this.hashType = hashType;
-		this.passPhrase = passPhrase;
-		this.block = block;
+		this.state = state;
 	}
-	
+
 	//Methods
 	@Override
 	public void run() {
+		BufferedReader in = null;
+		
+		try {
+		//Establish port readers
+		in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+			
+		//Collect data.
+		String [] parsed = in.readLine().split("/");
+		
+		//Break if incorrect command
+		if (!parsed[0].equals("newBlock") || parsed.length != 4) {
+			return;
+		}
+		
+		//Establish local copy of the block
+		DataBlock block = new DataBlock(parsed[2], parsed[3]);
+		
+		System.out.println(block.toString());
+		
+		//TODO: If already processing a request push to queue instead starting thread.
+		
 		//variables
 		String randomString;
 		
 		//Start randomizer
 		Random randomizer = new Random();
 		
-		System.out.println("Solving for New Block...");
 		//TODO: Add time to block.
 		
 		//Randomize Block Seed
-		randomString = Integer.toHexString(randomizer.nextInt(18354124));
+		randomString = Integer.toHexString(randomizer.nextInt(1000000));
 		block.setRandomSeed(randomString);
 		
 		//Hash new block.
+		StringBuffer hash = new StringBuffer();
+		
+		MessageDigest digester = MessageDigest.getInstance(state.hashType);
+		digester.update(block.toString().getBytes());
+		byte byteData[] = digester.digest();
+		
+		for (int i = 0; i < byteData.length; i++) {
+			hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
+		}
+		
+		block.setEndHash(hash.toString());
 		
 		//TODO: Check New Hash for requirements.
 		
 		//TODO: Inform indexed processes of discovered solution.
+		
+		} catch (Exception ex) {ex.printStackTrace();}
 	}	
 }
 

@@ -417,7 +417,7 @@ public class BlockJ {
       // CDE: Convert the byte[] to hex format. THIS IS NOT VERFIED CODE:
       StringBuffer sb = new StringBuffer();
       for (int i = 0; i < byteData.length; i++) {
-	sb.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
+    	  sb.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
       }
       SHA256String = sb.toString(); // For ease of looking at it, we'll save it as a string.
     }catch(NoSuchAlgorithmException x){};
