@@ -72,6 +72,19 @@ class DataBlock{
 	
 	//Methods
 	
+	/**
+	 * Returns a string used for hashing.
+	 * Excludes any existing end hash from the block
+	 * @return
+	 */
+	public String hashString() {
+		return new StringBuilder()
+				.append(startHash)
+				.append(data)
+				.append(randomSeed)
+				.toString();
+	}
+	
 	/* (non-Javadoc)
 	 * Concatenate the string of values into a single descriptive string.
 	 * Description string can also be used in hashing methods
@@ -225,9 +238,6 @@ public class BlockChain {
 					.append(block.getStartHash()).append('/')
 					.append(block.getData());
 			
-			//TODO: REMOVE TEST PRINT
-			System.out.println(request.toString());
-			
 			//Contact ports to start solving process
 			contactPorts(state.unverifiedPort,0,state.numPorts, request.toString());
 		
@@ -363,52 +373,63 @@ class Solver extends Thread{
 		BufferedReader in = null;
 		
 		try {
-		//Establish port readers
-		in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+			//Establish port readers
+			in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+				
+			//Collect data.
+			String [] parsed = in.readLine().split("/");
 			
-		//Collect data.
-		String [] parsed = in.readLine().split("/");
-		
-		//Break if incorrect command
-		if (!parsed[0].equals("newBlock") || parsed.length != 4) {
-			return;
-		}
-		
-		//Establish local copy of the block
-		DataBlock block = new DataBlock(parsed[2], parsed[3]);
-		
-		System.out.println(block.toString());
-		
-		//TODO: If already processing a request push to queue instead starting thread.
-		
-		//variables
-		String randomString;
-		
-		//Start randomizer
-		Random randomizer = new Random();
-		
-		//TODO: Add time to block.
-		
-		//Randomize Block Seed
-		randomString = Integer.toHexString(randomizer.nextInt(1000000));
-		block.setRandomSeed(randomString);
-		
-		//Hash new block.
-		StringBuffer hash = new StringBuffer();
-		
-		MessageDigest digester = MessageDigest.getInstance(state.hashType);
-		digester.update(block.toString().getBytes());
-		byte byteData[] = digester.digest();
-		
-		for (int i = 0; i < byteData.length; i++) {
-			hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
-		}
-		
-		block.setEndHash(hash.toString());
-		
-		//TODO: Check New Hash for requirements.
-		
-		//TODO: Inform indexed processes of discovered solution.
+			//Break if incorrect command
+			if (!parsed[0].equals("newBlock") || parsed.length != 4) {
+				return;
+			}
+			
+			//Establish local copy of the block
+			DataBlock block = new DataBlock(parsed[2], parsed[3]);
+			
+			//TODO: If already processing a request push to queue instead starting thread.
+			
+			//variables
+			String randomString;
+			StringBuffer hash;
+			Random randomizer = new Random();
+			byte byteData[];
+			
+			while(true) {
+				//TODO: Add time to block.
+				
+				//Randomize Block Seed
+				randomString = Integer.toHexString(randomizer.nextInt(1000000));
+				block.setRandomSeed(randomString);
+				
+				//Hash new block.
+				hash = new StringBuffer();
+				
+				MessageDigest digester = MessageDigest.getInstance(state.hashType);
+				digester.update(block.hashString().getBytes());
+				byteData = digester.digest();
+				
+				//TODO: Check New Hash for requirements, break loop if acceptable solution found
+				//Parse last 2 bytes into an integer 
+				hash.append("0x");
+				for (int i = byteData.length - 4; i < byteData.length; i++) {
+					hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
+				}
+				
+				System.out.println(Long.decode(hash.toString()));
+				
+				if (Long.decode(hash.toString()) < 40000) {break;}
+				
+				//TODO: Check if someone else has already solved the problem.
+			}
+			
+			hash = new StringBuffer();
+			for (int i = 0; i < byteData.length; i++) {
+				hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
+			}
+			block.setEndHash(hash.toString());
+			
+			//TODO: Inform indexed processes of discovered solution.
 		
 		} catch (Exception ex) {ex.printStackTrace();}
 	}	
