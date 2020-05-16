@@ -35,15 +35,24 @@ import java.net.Socket;
 import java.security.MessageDigest;
 import java.util.Random;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.Queue;
+
 /**
  * @author klee8
  * Data block to be solved
  * Contains signature information, starting & ending hashes, & the data to be encoded.
  */
 class DataBlock{
+	//Used by other processes to know how many lines to look for in a stream.
+	public static final int blockLines = 6;
 	
 	//Properties
-	private String startHash;
+	private String startHash = "";
 	private String data;
 	private String randomSeed = "";
 	private String endHash = "";
@@ -52,6 +61,10 @@ class DataBlock{
 	public DataBlock(String startHash, String data) {
 		super();
 		this.startHash = startHash;
+		this.data = data;
+	}
+	public DataBlock(String data) {
+		super();
 		this.data = data;
 	}
 	
@@ -68,8 +81,7 @@ class DataBlock{
 	public String getEndHash() {return endHash;}
 	public void setEndHash(String endHash) {this.endHash = endHash;}
 	
-	//Methods
-	
+	//Methods	
 	/**
 	 * Returns a string used for hashing.
 	 * Excludes any existing end hash from the block
@@ -96,6 +108,7 @@ class DataBlock{
 				.append(endHash)
 				.toString();
 	}
+
 }
 
 /**
@@ -108,10 +121,14 @@ class ProcessState{
 	//Singleton
 	private static ProcessState instance = null;
 	
+	//Other Properties
+	private Queue<DataBlock> unsolved;
+	private ArrayList<DataBlock> ledger;
+	
 	//Port Properties
 	public int portNum;
 	public int numPorts;
-	public int requestPort = 4710;
+	public int unverifiedPort = 4710;
 	
 	//Hashing properties
 	public String hashType = "SHA-256";
@@ -123,6 +140,8 @@ class ProcessState{
 	//Constructors
 	private ProcessState() {
 		super();
+		this.unsolved = new LinkedList <DataBlock> ();
+		this.ledger = new ArrayList <DataBlock> ();
 	}
 
 	
@@ -158,7 +177,6 @@ public class BlockChain {
 		ProcessState state = ProcessState.getInstance();
 		
 		String input = "";
-		DataBlock block;
 		BufferedReader inStream =  new BufferedReader(new InputStreamReader(System.in));
 		
 		//Parse Arguments
@@ -189,11 +207,11 @@ public class BlockChain {
 	    }
 		
 		//Mutate port(s)
-		state.requestPort += state.portNum;
+		state.unverifiedPort += state.portNum;
 		
 		//Splash Screen
 		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
-		System.out.println("Running as process #" + state.portNum);
+		System.out.println("Running as process #" + state.portNum + '\n');
 		
 		//Spawn secondary processes Thread(s).
 		new RequestListener(state).start();
@@ -202,7 +220,11 @@ public class BlockChain {
 		//UI Loop
 		while (true) {
 			//Prompt user for data.
-			System.out.println("Please input a new phrase to commit to the block chain or QUIT to end the program.");
+			System.out.println("\nAccepted Inputs (WIP):");
+			System.out.println("C - Display each block with credit for the process that solves it");
+			System.out.println("R - Read a new file to record (R <File Name>)");
+			System.out.println("V - Verify Blocks");
+			System.out.println("L - Retreive and display Lines");
 			System.out.print("Input: ");
 			
 			//Read in data to be encoded.
@@ -213,32 +235,50 @@ public class BlockChain {
 				e.printStackTrace();
 			}
 			
-			//Break loop on quit command.
-			if (input.toUpperCase().equals("QUIT")) break;
-			
-			//TODO: Check if there is already a block being solved
-			
-			//Build the data block
-			block = new DataBlock(state.getCurrentHash(), input);
-			
-			//TODO: Add Digital Signature
-			
-			//Build the request string.
-			StringBuilder request = new StringBuilder("newBlock/")
-					.append(state.getCurrentBlock()).append('/')
-					.append(block.getStartHash()).append('/')
-					.append(block.getData());
-			
-			//Contact ports to start solving process
-			contactPorts(state.requestPort,0,state.numPorts, request.toString());
+			//Handle Inputs
+			switch(input) {
+			case "C":
+				break;
+			case "R":
+				readFile(state, inStream);
+				break;
+			case "V":
+				break;
+			case "L":
+				break;
+			default:
+				break;
+			}
 		
 		}
 		
-		//TODO: inform other processes of signoff?
+	}
+	
+	private static void readFile(ProcessState state, BufferedReader in) {
+		DataBlock block;
+		String input = "";
 		
-		//End of process
-		System.out.println("Block Chain process ended.");
+		//TODO: Change to actually read a file.
 		
+		System.out.println();
+		System.out.print("Line to input:");
+		
+		try {
+			input = in.readLine();
+		} catch (IOException e) {e.printStackTrace();}
+		
+		//Build the data block
+		block = new DataBlock(input);
+		
+		//TODO: Add Digital Signature
+		
+		//Set up JSON builder
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		
+		System.out.println(gson.toJson(block));
+		
+		//Contact ports to start solving process
+		contactPorts(state.unverifiedPort,0,state.numPorts, gson.toJson(block));
 	}
 	
 	public static void contactPorts(int port, int firstIndex, int secIndex, String message) {
@@ -265,63 +305,6 @@ public class BlockChain {
 		}
 		
 	}
-}
-
-
-/**RequestListener
- * @author klee8
- * Listen for new connections and handle for any valid request string.
- */
-class RequestListener extends Thread{
-	//Static Vars
-	private static final int queueLength = 6;
-	
-	//Properties
-	private ProcessState state;
-	
-	//Constructor
-	public RequestListener(ProcessState state) {
-		this.state = state;
-	}
-
-	@Override
-	public void run() {
-		Socket sock;
-		BufferedReader in;
-
-		//Open Port
-		try {
-			@SuppressWarnings("resource")
-			ServerSocket servsock = new ServerSocket(state.requestPort, queueLength);
-			
-			//Wait for a connection and handle
-			while (true) {
-				
-				//accept new connection
-				sock = servsock.accept();
-				System.out.println("New request received");
-				
-				//Read & Parse Request.
-				in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
-				String [] request = in.readLine().split("/");
-				
-				switch (request[0]) {
-				case "newBlock":
-					System.out.println("New block request received");
-					new Solver(request, state).start();
-					break;
-				case "newSolution":
-					System.out.println("New completed block received");
-					new BlockAdder(sock, request);
-				default:
-					System.out.println("Unsupported request received");
-				}
-					
-			}
-		} catch (IOException ioe) {ioe.printStackTrace();}
-		
-	}
-	
 }
 
 class BlockAdder extends Thread{
@@ -353,6 +336,59 @@ class BlockAdder extends Thread{
 	}
 }
 
+/**RequestListener
+ * @author klee8
+ * Listen for new connections and handle for any valid request string.
+ */
+class RequestListener extends Thread{
+	//Static Vars
+	private static final int queueLength = 6;
+	
+	//Properties
+	private ProcessState state;
+	
+	//Constructor
+	public RequestListener(ProcessState state) {
+		super();
+		this.state = state;
+	}
+
+	@Override
+	public void run() {
+		//Open Port
+		try {
+			@SuppressWarnings("resource")
+			ServerSocket servsock = new ServerSocket(state.unverifiedPort, queueLength);
+			
+			//Wait for a connection and handle
+			while (true) {
+				
+				//accept new connection
+				Socket sock = servsock.accept();
+				System.out.println("New request received");
+				
+				//Read & Parse Request.
+				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+				StringBuilder json = new StringBuilder();
+				
+				for (int i = 0; i < DataBlock.blockLines; i++) {
+					json.append(in.readLine());
+				}
+				
+				System.out.println(json.toString());
+				
+				DataBlock block = new Gson().fromJson(json.toString(), DataBlock.class);
+				
+				//Start new thread.
+				new Solver(block, state).start();
+				
+			}
+		} catch (IOException ioe) {ioe.printStackTrace();}
+		
+	}
+	
+}
+
 /**Solver
  * @author klee8
  * Takes input problem and solves for the given hash problem.
@@ -361,13 +397,13 @@ class BlockAdder extends Thread{
 class Solver extends Thread{
 	
 	//Properties
-	private String [] argument;
+	private DataBlock block;
 	private ProcessState state;
 	
 	//Constructor
-	public Solver(String[] argument, ProcessState state) {
+	public Solver(DataBlock block, ProcessState state) {
 		super();
-		this.argument = argument;
+		this.block = block;
 		this.state = state;
 	}
 
@@ -375,12 +411,9 @@ class Solver extends Thread{
 	@Override
 	public void run() {
 		
-		try {			
-			//Break if incorrect command length
-			if (argument.length != 4) {return;}
+		try {
 			
-			//Establish local copy of the block
-			DataBlock block = new DataBlock(argument[2], argument[3]);
+			System.out.println(block.toString());
 			
 			//TODO: If already processing a request push to queue instead starting thread.
 			
