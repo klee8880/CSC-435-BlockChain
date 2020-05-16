@@ -111,14 +111,13 @@ class ProcessState{
 	//Port Properties
 	public int portNum;
 	public int numPorts;
-	public int unverifiedPort = 4710;
-	public int blockChainPort = 4930;
+	public int requestPort = 4710;
 	
 	//Hashing properties
 	public String hashType = "SHA-256";
 	public int passPhrase = 1000;
 	private boolean solving = false;	
-	private int currentBlock = 0;
+	private int blockIndex = 0;
 	private String currentHash = "00000000000000000000";
 	
 	//Constructors
@@ -131,8 +130,8 @@ class ProcessState{
 	public boolean getSolving() {return solving;}
 	public void setSolving(Boolean solving) {this.solving = solving;}
 	
-	public int getCurrentBlock() {return currentBlock;}
-	public void setCurrentBlock(int currentBlock) {this.currentBlock = currentBlock;}
+	public int getCurrentBlock() {return blockIndex;}
+	public void setCurrentBlock(int currentBlock) {this.blockIndex = currentBlock;}
 	
 	public String getCurrentHash() {return currentHash;}
 	public void setCurrentHash(String currentHash) {this.currentHash = currentHash;}
@@ -189,9 +188,8 @@ public class BlockChain {
 	    	}
 	    }
 		
-		//Mutate ports
-		state.unverifiedPort += state.portNum;
-		state.blockChainPort += state.portNum;
+		//Mutate port(s)
+		state.requestPort += state.portNum;
 		
 		//Splash Screen
 		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
@@ -200,9 +198,6 @@ public class BlockChain {
 		//Spawn secondary processes Thread(s).
 		new RequestListener(state).start();
 		System.out.println("Request Listener Thread Spawned...");
-		
-		//Wait a moment
-		
 		
 		//UI Loop
 		while (true) {
@@ -235,7 +230,7 @@ public class BlockChain {
 					.append(block.getData());
 			
 			//Contact ports to start solving process
-			contactPorts(state.unverifiedPort,0,state.numPorts, request.toString());
+			contactPorts(state.requestPort,0,state.numPorts, request.toString());
 		
 		}
 		
@@ -246,7 +241,7 @@ public class BlockChain {
 		
 	}
 	
-	private static void contactPorts(int port, int firstIndex, int secIndex, String message) {
+	public static void contactPorts(int port, int firstIndex, int secIndex, String message) {
 		
 		Socket sock;
 		PrintStream toStream;
@@ -283,7 +278,6 @@ class RequestListener extends Thread{
 	
 	//Properties
 	private ProcessState state;
-	BufferedReader in = null;
 	
 	//Constructor
 	public RequestListener(ProcessState state) {
@@ -293,11 +287,12 @@ class RequestListener extends Thread{
 	@Override
 	public void run() {
 		Socket sock;
+		BufferedReader in;
 
 		//Open Port
 		try {
 			@SuppressWarnings("resource")
-			ServerSocket servsock = new ServerSocket(state.unverifiedPort, queueLength);
+			ServerSocket servsock = new ServerSocket(state.requestPort, queueLength);
 			
 			//Wait for a connection and handle
 			while (true) {
@@ -312,12 +307,15 @@ class RequestListener extends Thread{
 				
 				switch (request[0]) {
 				case "newBlock":
+					System.out.println("New block request received");
 					new Solver(request, state).start();
 					break;
 				case "newSolution":
-					default:
+					System.out.println("New completed block received");
+					new BlockAdder(sock, request);
+				default:
+					System.out.println("Unsupported request received");
 				}
-				//Spawn new process
 					
 			}
 		} catch (IOException ioe) {ioe.printStackTrace();}
@@ -326,6 +324,34 @@ class RequestListener extends Thread{
 	
 }
 
+class BlockAdder extends Thread{
+	
+	//Properties
+	Socket sock;
+	String [] arguements;
+	
+	//Constructor
+	public BlockAdder(Socket sock, String[] arguements) {
+		super();
+		this.sock = sock;
+		this.arguements = arguements;
+	}
+
+	@Override
+	public void run() {
+		
+		//Read in arguments
+		
+		//Read in JSON Block
+		
+		//Check that the hash is valid
+		
+		//Update state of program
+		
+		//Start hashing next block if there are blocks in the queue
+		
+	}
+}
 
 /**Solver
  * @author klee8
@@ -337,7 +363,6 @@ class Solver extends Thread{
 	//Properties
 	private String [] argument;
 	private ProcessState state;
-	private DataBlock block;
 	
 	//Constructor
 	public Solver(String[] argument, ProcessState state) {
@@ -400,7 +425,17 @@ class Solver extends Thread{
 			
 			System.out.println("Solution found: " + block.getEndHash());
 			
+			//Generate a message string that notifies other processes that of a completed block
+			//Includes all the information from 
+			StringBuilder message = new StringBuilder("newSolution/")
+					.append(state.getCurrentBlock())	.append('/')
+					.append(block.getStartHash())		.append('/')
+					.append(block.getData())			.append('/')
+					.append(block.getRandomSeed())		.append('/')
+					.append(block.getEndHash());
+			
 			//TODO: Inform indexed processes of discovered solution.
+			BlockChain.contactPorts(state.portNum, 0, 0, message.toString());
 		
 		} catch (Exception ex) {ex.printStackTrace();}
 	}	
