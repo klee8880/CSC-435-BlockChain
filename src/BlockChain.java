@@ -197,9 +197,7 @@ public class BlockChain {
 		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
 		System.out.println("Running as process #" + state.portNum);
 		
-		//Spawn secondary processes Threads.
-		new SolutionListener(state).start();
-		System.out.println("Solution Listener Thread Spawned...");
+		//Spawn secondary processes Thread(s).
 		new RequestListener(state).start();
 		System.out.println("Request Listener Thread Spawned...");
 		
@@ -275,37 +273,9 @@ public class BlockChain {
 }
 
 
-//------SOLUTION RECEIVER STRUCTURE------
-/**SolutionListener
- * @author klee8
- *
- */
-class SolutionListener extends Thread{
-	//Properties
-	private ProcessState state;
-	
-	//Constructor
-	public SolutionListener(ProcessState state) {
-		this.state = state;
-	}
-
-	@Override
-	public void run() {
-		
-		//Open Port
-		
-		//Listen for connection.
-		
-		//If solution is found inform the parent thread to stop searching for a solution and accept yours.
-	}
-	
-}
-
-
-//------NEW REQUEST STRUCTURE------
 /**RequestListener
  * @author klee8
- *
+ * Listen for new connections and handle for any valid request string.
  */
 class RequestListener extends Thread{
 	//Static Vars
@@ -313,6 +283,7 @@ class RequestListener extends Thread{
 	
 	//Properties
 	private ProcessState state;
+	BufferedReader in = null;
 	
 	//Constructor
 	public RequestListener(ProcessState state) {
@@ -335,8 +306,18 @@ class RequestListener extends Thread{
 				sock = servsock.accept();
 				System.out.println("New request received");
 				
+				//Read & Parse Request.
+				in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+				String [] request = in.readLine().split("/");
+				
+				switch (request[0]) {
+				case "newBlock":
+					new Solver(request, state).start();
+					break;
+				case "newSolution":
+					default:
+				}
 				//Spawn new process
-				new Solver(sock, state).start();
 					
 			}
 		} catch (IOException ioe) {ioe.printStackTrace();}
@@ -354,36 +335,27 @@ class RequestListener extends Thread{
 class Solver extends Thread{
 	
 	//Properties
-	private Socket sock;
+	private String [] argument;
 	private ProcessState state;
 	private DataBlock block;
 	
 	//Constructor
-	public Solver(Socket sock, ProcessState state) {
+	public Solver(String[] argument, ProcessState state) {
 		super();
-		this.sock = sock;
+		this.argument = argument;
 		this.state = state;
 	}
 
 	//Methods
 	@Override
 	public void run() {
-		BufferedReader in = null;
 		
-		try {
-			//Establish port readers
-			in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
-				
-			//Collect data.
-			String [] parsed = in.readLine().split("/");
-			
-			//Break if incorrect command
-			if (!parsed[0].equals("newBlock") || parsed.length != 4) {
-				return;
-			}
+		try {			
+			//Break if incorrect command length
+			if (argument.length != 4) {return;}
 			
 			//Establish local copy of the block
-			DataBlock block = new DataBlock(parsed[2], parsed[3]);
+			DataBlock block = new DataBlock(argument[2], argument[3]);
 			
 			//TODO: If already processing a request push to queue instead starting thread.
 			
@@ -407,18 +379,17 @@ class Solver extends Thread{
 				digester.update(block.hashString().getBytes());
 				byteData = digester.digest();
 				
-				//TODO: Check New Hash for requirements, break loop if acceptable solution found
+				//Check New Hash for requirements, break loop if acceptable solution found
 				//Parse last 2 bytes into an integer 
 				hash.append("0x");
 				for (int i = byteData.length - 4; i < byteData.length; i++) {
 					hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
 				}
 				
-				System.out.println(Long.decode(hash.toString()));
-				
-				if (Long.decode(hash.toString()) < 40000) {break;}
+				if (Long.decode(hash.toString()) < 5000) {break;}
 				
 				//TODO: Check if someone else has already solved the problem.
+				
 			}
 			
 			hash = new StringBuffer();
@@ -426,6 +397,8 @@ class Solver extends Thread{
 				hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
 			}
 			block.setEndHash(hash.toString());
+			
+			System.out.println("Solution found: " + block.getEndHash());
 			
 			//TODO: Inform indexed processes of discovered solution.
 		
