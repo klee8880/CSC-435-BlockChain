@@ -33,6 +33,7 @@ import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Random;
 
 import com.google.gson.Gson;
@@ -49,7 +50,7 @@ import java.util.Queue;
  */
 class DataBlock{
 	//Used by other processes to know how many lines to look for in a stream.
-	public static final int blockLines = 6;
+	public static final int requirement = 5000;
 	
 	//Properties
 	private String startHash = "";
@@ -95,7 +96,7 @@ class DataBlock{
 				.toString();
 	}
 	
-	/* (non-Javadoc)
+	/* 
 	 * Concatenate the string of values into a single descriptive string.
 	 * Description string can also be used in hashing methods
 	 */
@@ -109,6 +110,49 @@ class DataBlock{
 				.toString();
 	}
 
+	/**toJSON
+	 * Data block object to a single line of JSON.
+	 * @return JSON String
+	 */
+	public String toJson() {
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		return gson.toJson(this).replace("\n", "");
+	}
+
+	/**
+	 * @param hashType - the hash protocol to use
+	 * Generate a new hash given the current blocks written information
+	 * DOES NOT guarantee that the hash meets the requirements.
+	 * @return the ending Hash that was updated to the object
+	 * @throws NoSuchAlgorithmException
+	 */
+	public String generateHash(String hashType) throws NoSuchAlgorithmException {
+		//Get instance of digester
+		MessageDigest digester = MessageDigest.getInstance(hashType);
+		//Hash using the provided protocol
+		digester.update(hashString().getBytes());
+		byte[] byteData = digester.digest();
+		
+		//Convert byte array into a string
+		StringBuilder hash = new StringBuilder();
+		for (int i = 0; i < byteData.length; i++) {
+			hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
+		}
+		
+		return hash.toString();
+	}
+	
+	/**Chech that the hash meets the set requirement for the block.
+	 * @return boolean representing hash check result
+	 */
+	public boolean chechHash() {
+		StringBuilder sb = new StringBuilder("0x").append(endHash.substring(endHash.length() - 4));
+
+		//Return false if requirement is not met
+		if (Long.decode(sb.toString()) > DataBlock.requirement) return false;
+		
+		return true;
+	}
 }
 
 /**
@@ -123,16 +167,17 @@ class ProcessState{
 	
 	//Other Properties
 	private Queue<DataBlock> unsolved;
-	private ArrayList<DataBlock> ledger;
+	private LinkedList<DataBlock> ledger;
 	
 	//Port Properties
 	public int portNum;
-	public int numPorts;
-	public int unverifiedPort = 4710;
+	public int totalPorts;
+	public final int unverifiedPort = 4820;
+	public final int verifiedPort = 4930;
+	public final int keyPort = 4710;
 	
 	//Hashing properties
 	public String hashType = "SHA-256";
-	public int passPhrase = 1000;
 	private boolean solving = false;	
 	private int blockIndex = 0;
 	private String currentHash = "00000000000000000000";
@@ -141,7 +186,7 @@ class ProcessState{
 	private ProcessState() {
 		super();
 		this.unsolved = new LinkedList <DataBlock> ();
-		this.ledger = new ArrayList <DataBlock> ();
+		this.ledger = new LinkedList <DataBlock> ();
 	}
 
 	
@@ -176,7 +221,7 @@ public class BlockChain {
 		//Get the singleton process state shared between processes. 
 		ProcessState state = ProcessState.getInstance();
 		
-		String input = "";
+		String[] input = {""};
 		BufferedReader inStream =  new BufferedReader(new InputStreamReader(System.in));
 		
 		//Parse Arguments
@@ -194,10 +239,10 @@ public class BlockChain {
 	    }
 		
 		//Get number of total ports
-		if (args.length < 2) state.numPorts = 3;//Default to 3 if no argument provided.		
+		if (args.length < 2) state.totalPorts = 3;//Default to 3 if no argument provided.		
 		else {
 	    	try {
-	    		state.numPorts = Integer.parseInt(args[0]);
+	    		state.totalPorts = Integer.parseInt(args[0]);
 	    	}
 	    	//If integer cannot be parsed terminate process.
 	    	catch (NumberFormatException ex) {
@@ -206,16 +251,15 @@ public class BlockChain {
 	    	}
 	    }
 		
-		//Mutate port(s)
-		state.unverifiedPort += state.portNum;
-		
 		//Splash Screen
 		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
 		System.out.println("Running as process #" + state.portNum + '\n');
 		
 		//Spawn secondary processes Thread(s).
 		new RequestListener(state).start();
-		System.out.println("Request Listener Thread Spawned...");
+		System.out.println("Requested Block Listener Thread Spawned...");
+		new CompleteListener(state).start();
+		System.out.println("Complete Block Listener Thread Spawned...");
 		
 		//UI Loop
 		while (true) {
@@ -229,27 +273,28 @@ public class BlockChain {
 			
 			//Read in data to be encoded.
 			try {
-				input = inStream.readLine();
+				
+				input = inStream.readLine().split(" ");
+				//Handle Inputs
+				switch(input[0]) {
+				case "C":
+					break;
+				case "R":
+					readFile(state, inStream);
+					break;
+				case "V":
+					break;
+				case "L":
+					break;
+				default:
+					System.out.println("\nUnsupported Command Provided...");
+					break;
+				}
+				
 			} catch (IOException e) {
 				System.out.println("Error occured reading input See below:");
 				e.printStackTrace();
 			}
-			
-			//Handle Inputs
-			switch(input) {
-			case "C":
-				break;
-			case "R":
-				readFile(state, inStream);
-				break;
-			case "V":
-				break;
-			case "L":
-				break;
-			default:
-				break;
-			}
-		
 		}
 		
 	}
@@ -272,13 +317,8 @@ public class BlockChain {
 		
 		//TODO: Add Digital Signature
 		
-		//Set up JSON builder
-		Gson gson = new GsonBuilder().setPrettyPrinting().create();
-		
-		System.out.println(gson.toJson(block));
-		
 		//Contact ports to start solving process
-		contactPorts(state.unverifiedPort,0,state.numPorts, gson.toJson(block));
+		contactPorts(state.unverifiedPort,0,state.totalPorts, block.toJson());
 	}
 	
 	public static void contactPorts(int port, int firstIndex, int secIndex, String message) {
@@ -307,32 +347,97 @@ public class BlockChain {
 	}
 }
 
+/**
+ * @author klee8
+ * Listener to wait for completed block notifications.
+ */
+class CompleteListener extends Thread{
+	//Static Vars
+	private static final int queueLength = 6;
+	
+	//Properties
+	private ProcessState state;
+	
+	//Constructor
+	public CompleteListener(ProcessState state) {
+		super();
+		this.state = state;
+	}	
+	
+	@Override
+	public void run(){
+		//Open Port
+		try {
+			@SuppressWarnings("resource")
+			ServerSocket servsock = new ServerSocket(state.verifiedPort + state.portNum, queueLength);
+			
+			//Wait for a connection and handle
+			while (true) {
+				
+				//accept new connection
+				Socket sock = servsock.accept();
+				System.out.println("New completed block received");
+				
+				//Read & Parse Request.
+				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+				DataBlock block = new Gson().fromJson(in.readLine(), DataBlock.class);
+				
+				//Start new thread.
+				new BlockAdder(state, block).start();
+				
+			}
+		} catch (IOException ioe) {ioe.printStackTrace();}
+	}
+}
+
 class BlockAdder extends Thread{
 	
 	//Properties
-	Socket sock;
-	String [] arguements;
-	
+	ProcessState state;
+	DataBlock block;
+
 	//Constructor
-	public BlockAdder(Socket sock, String[] arguements) {
+	public BlockAdder(ProcessState state, DataBlock block) {
 		super();
-		this.sock = sock;
-		this.arguements = arguements;
+		this.state = state;
+		this.block = block;
 	}
 
 	@Override
 	public void run() {
+		byte byteData[];
+
+		//Break if the end hash is not valid
+		if (block.chechHash()) {
+			System.out.println("FAILURE: Block's end hash does not match requirement");
+			return;
+		}
+		System.out.println("SUCCESS: Hash Requirments Met");
 		
-		//Read in arguments
+		try {
+			
+		//Rehash block and compare
+		String newHash = block.generateHash(state.hashType);
 		
-		//Read in JSON Block
+		//Check if this hash matches the startiing block
+		if (!block.getEndHash().equals(newHash)) {
+			System.out.println("FAILURE: Hash does not match block");
+			return;
+		}
+		System.out.println("SUCCESS: Hash Matches Provided");
 		
-		//Check that the hash is valid
+		//Update the ledger
+		
+		//Rewrite data file
 		
 		//Update state of program
 		
 		//Start hashing next block if there are blocks in the queue
 		
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 }
 
@@ -358,7 +463,7 @@ class RequestListener extends Thread{
 		//Open Port
 		try {
 			@SuppressWarnings("resource")
-			ServerSocket servsock = new ServerSocket(state.unverifiedPort, queueLength);
+			ServerSocket servsock = new ServerSocket(state.unverifiedPort + state.portNum, queueLength);
 			
 			//Wait for a connection and handle
 			while (true) {
@@ -369,15 +474,7 @@ class RequestListener extends Thread{
 				
 				//Read & Parse Request.
 				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
-				StringBuilder json = new StringBuilder();
-				
-				for (int i = 0; i < DataBlock.blockLines; i++) {
-					json.append(in.readLine());
-				}
-				
-				System.out.println(json.toString());
-				
-				DataBlock block = new Gson().fromJson(json.toString(), DataBlock.class);
+				DataBlock block = new Gson().fromJson(in.readLine(), DataBlock.class);
 				
 				//Start new thread.
 				new Solver(block, state).start();
@@ -411,17 +508,19 @@ class Solver extends Thread{
 	@Override
 	public void run() {
 		
-		try {
-			
-			System.out.println(block.toString());
-			
+		try {			
 			//TODO: If already processing a request push to queue instead starting thread.
 			
 			//variables
 			String randomString;
-			StringBuffer hash;
 			Random randomizer = new Random();
-			byte byteData[];
+			
+			//Add hash to block
+			block.setStartHash(state.getCurrentHash());
+			
+			//Notify Console of solution cycle
+			System.out.println("Solving for the below block:");
+			System.out.println(block.toJson());
 			
 			while(true) {
 				//TODO: Add time to block.
@@ -430,45 +529,19 @@ class Solver extends Thread{
 				randomString = Integer.toHexString(randomizer.nextInt(1000000));
 				block.setRandomSeed(randomString);
 				
-				//Hash new block.
-				hash = new StringBuffer();
+				//Generate a new hash
+				block.setEndHash(block.generateHash(state.hashType));
 				
-				MessageDigest digester = MessageDigest.getInstance(state.hashType);
-				digester.update(block.hashString().getBytes());
-				byteData = digester.digest();
-				
-				//Check New Hash for requirements, break loop if acceptable solution found
-				//Parse last 2 bytes into an integer 
-				hash.append("0x");
-				for (int i = byteData.length - 4; i < byteData.length; i++) {
-					hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
-				}
-				
-				if (Long.decode(hash.toString()) < 5000) {break;}
-				
-				//TODO: Check if someone else has already solved the problem.
+				//Check if the hash is valid.
+				if (block.chechHash()) break;
 				
 			}
 			
-			hash = new StringBuffer();
-			for (int i = 0; i < byteData.length; i++) {
-				hash.append(Integer.toString((byteData[i] & 0xff) + 0x100, 16).substring(1));
-			}
-			block.setEndHash(hash.toString());
-			
+			//Print to console
 			System.out.println("Solution found: " + block.getEndHash());
 			
-			//Generate a message string that notifies other processes that of a completed block
-			//Includes all the information from 
-			StringBuilder message = new StringBuilder("newSolution/")
-					.append(state.getCurrentBlock())	.append('/')
-					.append(block.getStartHash())		.append('/')
-					.append(block.getData())			.append('/')
-					.append(block.getRandomSeed())		.append('/')
-					.append(block.getEndHash());
-			
-			//TODO: Inform indexed processes of discovered solution.
-			BlockChain.contactPorts(state.portNum, 0, 0, message.toString());
+			//Inform indexed processes of discovered solution.
+			BlockChain.contactPorts(state.verifiedPort + state.portNum, 0, state.totalPorts, block.toJson());
 		
 		} catch (Exception ex) {ex.printStackTrace();}
 	}	
