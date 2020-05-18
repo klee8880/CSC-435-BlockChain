@@ -27,6 +27,7 @@ All acceptable commands are displayed on the various consoles.
 ----------------------------------------------------------*/
 
 import java.io.BufferedReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
@@ -35,13 +36,15 @@ import java.net.Socket;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Random;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.Semaphore;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.Queue;
 
 /**
  * @author klee8
@@ -55,6 +58,7 @@ class DataBlock{
 	//Properties
 	private String startHash = "";
 	private String data;
+	private String solver = "DEFAULT";
 	private String randomSeed = "";
 	private String endHash = "";
 	
@@ -76,6 +80,9 @@ class DataBlock{
 	public String getData() {return data;}
 	public void setData(String data) {this.data = data;}
 	
+	public String getSolver() {return solver;}
+	public void setSolver(String solver) {this.solver = solver;}
+	
 	public String getRandomSeed() {return randomSeed;}
 	public void setRandomSeed(String randomString) {this.randomSeed = randomString;}
 	
@@ -92,6 +99,7 @@ class DataBlock{
 		return new StringBuilder()
 				.append(startHash)
 				.append(data)
+				.append(solver)
 				.append(randomSeed)
 				.toString();
 	}
@@ -105,6 +113,7 @@ class DataBlock{
 		return new StringBuilder()
 				.append(startHash).append('\n')
 				.append(data).append('\n')
+				.append(solver).append('\n')
 				.append(randomSeed).append('\n')
 				.append(endHash)
 				.toString();
@@ -142,16 +151,16 @@ class DataBlock{
 		return hash.toString();
 	}
 	
-	/**Chech that the hash meets the set requirement for the block.
+	/**Check that the hash meets the set requirement for the block.
 	 * @return boolean representing hash check result
 	 */
-	public boolean chechHash() {
-		StringBuilder sb = new StringBuilder("0x").append(endHash.substring(endHash.length() - 4));
+	public boolean checkHash() {
+		StringBuilder sb = new StringBuilder("0x").append(endHash.substring(endHash.length() - 8));
 
 		//Return false if requirement is not met
-		if (Long.decode(sb.toString()) > DataBlock.requirement) return false;
+		if (Long.decode(sb.toString()) < DataBlock.requirement) return true;
+		else return false;
 		
-		return true;
 	}
 }
 
@@ -165,9 +174,12 @@ class ProcessState{
 	//Singleton
 	private static ProcessState instance = null;
 	
+	//Semaphore used to lock hashing process a block is being processed
+	public Semaphore hashingLock = new Semaphore(1);
+	
 	//Other Properties
-	private Queue<DataBlock> unsolved;
-	private LinkedList<DataBlock> ledger;
+	private PriorityBlockingQueue<DataBlock> unsolved;
+	public ArrayList<DataBlock> ledger;
 	
 	//Port Properties
 	public int portNum;
@@ -179,14 +191,22 @@ class ProcessState{
 	//Hashing properties
 	public String hashType = "SHA-256";
 	private boolean solving = false;	
-	private int blockIndex = 0;
-	private String currentHash = "00000000000000000000";
+	private int blockIndex;
 	
 	//Constructors
 	private ProcessState() {
 		super();
-		this.unsolved = new LinkedList <DataBlock> ();
-		this.ledger = new LinkedList <DataBlock> ();
+		this.unsolved = new PriorityBlockingQueue <DataBlock> ();
+		this.ledger = new ArrayList <DataBlock> ();
+
+		//TODO: Setup priority queue comparator
+		
+		//Set up first block
+		DataBlock block = new DataBlock("");
+		block.setEndHash("00000000000000000000");
+		
+		//Add this data block as the first seed block for the 
+		ledger.add(block);
 	}
 
 	
@@ -197,8 +217,17 @@ class ProcessState{
 	public int getCurrentBlock() {return blockIndex;}
 	public void setCurrentBlock(int currentBlock) {this.blockIndex = currentBlock;}
 	
-	public String getCurrentHash() {return currentHash;}
-	public void setCurrentHash(String currentHash) {this.currentHash = currentHash;}
+	public String getCurrentHash() {
+		return this.ledger.get(ledger.size() - 1).getEndHash();
+	}
+	
+	/**getNextUnsolved
+	 * Return the next unsolved block of from the queue of unsolved requests
+	 * @return DataBlock or null if queue is empty
+	 */
+	public DataBlock getNextUnsolved() {
+		return unsolved.poll();
+	}
 
 	//Singleton requester
 	protected static ProcessState getInstance() {
@@ -264,11 +293,11 @@ public class BlockChain {
 		//UI Loop
 		while (true) {
 			//Prompt user for data.
-			System.out.println("\nAccepted Inputs (WIP):");
+			System.out.println("\nAccepted Inputs:");
 			System.out.println("C - Display each block with credit for the process that solves it");
-			System.out.println("R - Read a new file to record (R <File Name>)");
+			System.out.println("R - (WIP) Read a new file to record (R <File Name>)");
 			System.out.println("V - Verify Blocks");
-			System.out.println("L - Retreive and display Lines");
+			System.out.println("L - (WIP) List committed information");
 			System.out.print("Input: ");
 			
 			//Read in data to be encoded.
@@ -276,19 +305,12 @@ public class BlockChain {
 				
 				input = inStream.readLine().split(" ");
 				//Handle Inputs
-				switch(input[0]) {
-				case "C":
-					break;
-				case "R":
-					readFile(state, inStream);
-					break;
-				case "V":
-					break;
-				case "L":
-					break;
-				default:
-					System.out.println("\nUnsupported Command Provided...");
-					break;
+				switch(input[0].toUpperCase()) {
+				case "C": viewLedger(state); break;
+				case "R": readFile(state, inStream); break;
+				case "V": verifyLedger(state.ledger); break;
+				case "L": break;
+				default: System.out.println("\nUnsupported Command Provided..."); break;
 				}
 				
 			} catch (IOException e) {
@@ -306,7 +328,7 @@ public class BlockChain {
 		//TODO: Change to actually read a file.
 		
 		System.out.println();
-		System.out.print("Line to input:");
+		System.out.print("Line to input: ");
 		
 		try {
 			input = in.readLine();
@@ -319,6 +341,41 @@ public class BlockChain {
 		
 		//Contact ports to start solving process
 		contactPorts(state.unverifiedPort,0,state.totalPorts, block.toJson());
+	}
+	
+	private static void viewLedger(ProcessState state) {
+		//For each entry in the ledger print a line
+		System.out.println();
+		System.out.println("Number of Blocks: " + state.ledger.size());
+		
+		//For each loop to print out each line of the ledger
+		for (DataBlock block: state.ledger) {
+			System.out.println();
+			System.out.println(block.getSolver() + ", " + block.toJson());
+		}
+	}
+	
+	public static void verifyLedger(List <DataBlock> ledger) {
+		DataBlock previous = null;
+		int verified = ledger.size();
+		
+		for (DataBlock block: ledger) {
+			//If first block update previous and move to next block.
+			if (previous == null) {
+				previous = block;
+				continue;
+			}
+			else {
+				//If the block does not match the previous decrement counter
+				if (!block.getStartHash().equals(previous.getEndHash()))
+					verified--;
+				
+				previous = block;
+			}
+		}
+		
+		System.out.println("Blocks verified: " + verified + " of " + ledger.size());
+		
 	}
 	
 	public static void contactPorts(int port, int firstIndex, int secIndex, String message) {
@@ -405,39 +462,83 @@ class BlockAdder extends Thread{
 
 	@Override
 	public void run() {
-		byte byteData[];
-
-		//Break if the end hash is not valid
-		if (block.chechHash()) {
-			System.out.println("FAILURE: Block's end hash does not match requirement");
+		
+		//Acquire semaphore lock
+		try {state.hashingLock.acquire();} catch (InterruptedException e1) {
+			e1.printStackTrace();
 			return;
 		}
-		System.out.println("SUCCESS: Hash Requirments Met");
+
+		//Check if the hash is valid
+		if (!block.checkHash()) {
+			System.out.println("FAILURE: Block's end hash does not match requirement");
+			state.hashingLock.release();
+			return;
+		}
+		System.out.println("SUCCESS: Hash requirments met");
 		
 		try {
 			
-		//Rehash block and compare
-		String newHash = block.generateHash(state.hashType);
-		
-		//Check if this hash matches the startiing block
-		if (!block.getEndHash().equals(newHash)) {
-			System.out.println("FAILURE: Hash does not match block");
-			return;
-		}
-		System.out.println("SUCCESS: Hash Matches Provided");
-		
-		//Update the ledger
-		
-		//Rewrite data file
-		
-		//Update state of program
-		
-		//Start hashing next block if there are blocks in the queue
+			//Rehash block and compare
+			String newHash = block.generateHash(state.hashType);
+			
+			//Check if this hash matches the starting block
+			if (!block.getEndHash().equals(newHash)) {
+				System.out.println("FAILURE: Hash does not match block");
+				state.hashingLock.release();
+				return;
+			}
+			System.out.println("SUCCESS: Hash matches provided");
+			
+			//Check that the beginning hash matches the ending hash on the ledger
+			String previousHash = state.ledger.get(state.ledger.size() - 1).getEndHash();
+			if (!block.getStartHash().equals(previousHash)) {
+				System.out.println("FAILURE: Hash does not fit the ledger.");
+				state.hashingLock.release();
+				return;
+			}
+			System.out.println("SUCCESS: Hash matches the current ledger");
+			
+			//Update the ledger
+			state.ledger.add(block);
+			
+			//Rewrite data file if you are process 0
+			if (state.portNum == 0) writeJSONFile("BlockchainLedger.json", state.ledger);
+			
+			//TODO: Start hashing next block if there are blocks in the queue
+			
+			//release semaphore lock
+			state.hashingLock.release();
 		
 		} catch (NoSuchAlgorithmException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+
+	}
+	
+	/**writeJSONFile
+	 * commits the given array to hardDisk by writing it to a file.
+	 * @param name - Name of the file
+	 * @param array - the array of objects you wish to write
+	 */
+	private void writeJSONFile(String name, ArrayList <DataBlock> array) {
+		
+		//Open file
+		try(FileWriter out = new FileWriter(name)){
+			//Write file
+			 Gson gson = new GsonBuilder().setPrettyPrinting().create();
+			
+			for(DataBlock block: array) {
+				gson.toJson(block, out);
+			}
+			
+			//Close the file
+			out.close();
+			
+		} catch (IOException e) {e.printStackTrace();}
+		
 	}
 }
 
@@ -512,33 +613,48 @@ class Solver extends Thread{
 			//TODO: If already processing a request push to queue instead starting thread.
 			
 			//variables
-			String randomString;
 			Random randomizer = new Random();
+			int attempt = 1;
 			
-			//Add hash to block
-			block.setStartHash(state.getCurrentHash());
+			//Add identifying information to block for the current processes
+			block.setSolver("Process " + state.portNum);
 			
 			//Notify Console of solution cycle
 			System.out.println("Solving for the below block:");
 			System.out.println(block.toJson());
 			
 			while(true) {
+				//Acquire semaphore lock
+				state.hashingLock.acquire();
+				
+				//TODO: check that this block has not already been solved.
+				
+				//Update start hash in case newest locked block has changed
+				block.setStartHash(state.getCurrentHash());
+				
 				//TODO: Add time to block.
 				
+				
 				//Randomize Block Seed
-				randomString = Integer.toHexString(randomizer.nextInt(1000000));
+				String randomString = Integer.toHexString(randomizer.nextInt(1000000));
 				block.setRandomSeed(randomString);
 				
 				//Generate a new hash
 				block.setEndHash(block.generateHash(state.hashType));
 				
 				//Check if the hash is valid.
-				if (block.chechHash()) break;
+				if (block.checkHash()) break;
 				
+				//Release semaphore lock
+				state.hashingLock.release();
+				
+				attempt++;
 			}
 			
+			state.hashingLock.release();
+			
 			//Print to console
-			System.out.println("Solution found: " + block.getEndHash());
+			System.out.println("Solution found on attempt #(" + attempt + "): " + block.getEndHash());
 			
 			//Inform indexed processes of discovered solution.
 			BlockChain.contactPorts(state.verifiedPort + state.portNum, 0, state.totalPorts, block.toJson());
