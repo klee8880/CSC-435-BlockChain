@@ -1,0 +1,19 @@
+{
+  "startHash": "",
+  "data": "",
+  "solver": "DEFAULT",
+  "randomSeed": "",
+  "endHash": "00000000000000000000"
+}{
+  "startHash": "00000000000000000000",
+  "data": "R",
+  "solver": "Process 0",
+  "randomSeed": "dd090",
+  "endHash": "3f17eeb3c69c13fa2683ae84480929a7e90aa5e743184c3a934f846c00000795"
+}{
+  "startHash": "3f17eeb3c69c13fa2683ae84480929a7e90aa5e743184c3a934f846c00000795",
+  "data": "R",
+  "solver": "Process 0",
+  "randomSeed": "195bd",
+  "endHash": "133770f9dd431fa981e0fb0666a27f359782fa817901897e55a04a4600000b67"
+}

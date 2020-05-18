@@ -39,9 +39,7 @@ import java.util.Random;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -51,7 +49,7 @@ import com.google.gson.GsonBuilder;
  * Data block to be solved
  * Contains signature information, starting & ending hashes, & the data to be encoded.
  */
-class DataBlock{
+class DataBlock implements Comparable<DataBlock>{
 	//Used by other processes to know how many lines to look for in a stream.
 	public static final int requirement = 5000;
 	
@@ -162,6 +160,15 @@ class DataBlock{
 		else return false;
 		
 	}
+	
+	//TODO: implement compareTo function
+	/* compareTo
+	 * @see java.lang.Comparable#compareTo(java.lang.Object)
+	 */
+	@Override
+	public int compareTo(DataBlock o) {
+		return 0;
+	}
 }
 
 /**
@@ -178,7 +185,7 @@ class ProcessState{
 	public Semaphore hashingLock = new Semaphore(1);
 	
 	//Other Properties
-	private PriorityBlockingQueue<DataBlock> unsolved;
+	public PriorityBlockingQueue<DataBlock> unsolved;
 	public ArrayList<DataBlock> ledger;
 	
 	//Port Properties
@@ -190,7 +197,7 @@ class ProcessState{
 	
 	//Hashing properties
 	public String hashType = "SHA-256";
-	private boolean solving = false;	
+	public Semaphore solvingLock = new Semaphore(1);
 	private int blockIndex;
 	
 	//Constructors
@@ -198,8 +205,6 @@ class ProcessState{
 		super();
 		this.unsolved = new PriorityBlockingQueue <DataBlock> ();
 		this.ledger = new ArrayList <DataBlock> ();
-
-		//TODO: Setup priority queue comparator
 		
 		//Set up first block
 		DataBlock block = new DataBlock("");
@@ -211,9 +216,6 @@ class ProcessState{
 
 	
 	//Getters and Setters
-	public boolean getSolving() {return solving;}
-	public void setSolving(Boolean solving) {this.solving = solving;}
-	
 	public int getCurrentBlock() {return blockIndex;}
 	public void setCurrentBlock(int currentBlock) {this.blockIndex = currentBlock;}
 	
@@ -289,6 +291,8 @@ public class BlockChain {
 		System.out.println("Requested Block Listener Thread Spawned...");
 		new CompleteListener(state).start();
 		System.out.println("Complete Block Listener Thread Spawned...");
+		
+		//TODO: Pause thread until all needed processes/keys
 		
 		//UI Loop
 		while (true) {
@@ -394,9 +398,7 @@ public class BlockChain {
 				toStream.println(message);
 				toStream.flush();
 				
-			} catch (IOException e) {
-				System.out.println("Connection not found.");
-			}
+			} catch (IOException e) {}
 			
 			firstIndex++;
 		}
@@ -442,6 +444,7 @@ class CompleteListener extends Thread{
 				//Start new thread.
 				new BlockAdder(state, block).start();
 				
+				sock.close();
 			}
 		} catch (IOException ioe) {ioe.printStackTrace();}
 	}
@@ -479,7 +482,7 @@ class BlockAdder extends Thread{
 		
 		try {
 			
-			//Rehash block and compare
+			//Rehash block and compare 
 			String newHash = block.generateHash(state.hashType);
 			
 			//Check if this hash matches the starting block
@@ -505,15 +508,10 @@ class BlockAdder extends Thread{
 			//Rewrite data file if you are process 0
 			if (state.portNum == 0) writeJSONFile("BlockchainLedger.json", state.ledger);
 			
-			//TODO: Start hashing next block if there are blocks in the queue
-			
 			//release semaphore lock
 			state.hashingLock.release();
 		
-		} catch (NoSuchAlgorithmException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		} catch (NoSuchAlgorithmException e) {e.printStackTrace();}
 		
 
 	}
@@ -580,6 +578,7 @@ class RequestListener extends Thread{
 				//Start new thread.
 				new Solver(block, state).start();
 				
+				sock.close();
 			}
 		} catch (IOException ioe) {ioe.printStackTrace();}
 		
@@ -610,7 +609,11 @@ class Solver extends Thread{
 	public void run() {
 		
 		try {			
-			//TODO: If already processing a request push to queue instead starting thread.
+			//Add the newest block to the queue
+			state.unsolved.add(block);
+			
+			//If already processing a request just end here and let the other process handle it.
+			if (!state.solvingLock.tryAcquire()) return;
 			
 			//variables
 			Random randomizer = new Random();
@@ -627,7 +630,8 @@ class Solver extends Thread{
 				//Acquire semaphore lock
 				state.hashingLock.acquire();
 				
-				//TODO: check that this block has not already been solved.
+				//acquire the correct block from the list.
+				block = state.unsolved.peek();
 				
 				//Update start hash in case newest locked block has changed
 				block.setStartHash(state.getCurrentHash());
@@ -651,7 +655,8 @@ class Solver extends Thread{
 				attempt++;
 			}
 			
-			state.hashingLock.release();
+			//Remove the now solved block
+			state.unsolved.remove(block);
 			
 			//Print to console
 			System.out.println("Solution found on attempt #(" + attempt + "): " + block.getEndHash());
@@ -659,7 +664,15 @@ class Solver extends Thread{
 			//Inform indexed processes of discovered solution.
 			BlockChain.contactPorts(state.verifiedPort + state.portNum, 0, state.totalPorts, block.toJson());
 		
-		} catch (Exception ex) {ex.printStackTrace();}
+		}catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}catch (InterruptedException e) {
+			e.printStackTrace();
+		}finally {//Release locks even when exceptions happen
+			//Release hold on the semaphores
+			state.hashingLock.release();
+			state.solvingLock.release();
+		}
 	}	
 }
 
