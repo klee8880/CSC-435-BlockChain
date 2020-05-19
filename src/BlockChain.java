@@ -27,10 +27,12 @@ All acceptable commands are displayed on the various consoles.
 ----------------------------------------------------------*/
 
 import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.io.Reader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.MessageDigest;
@@ -51,7 +53,7 @@ import com.google.gson.GsonBuilder;
  */
 class DataBlock implements Comparable<DataBlock>{
 	//Used by other processes to know how many lines to look for in a stream.
-	public static final int requirement = 5000;
+	public static final int requirement = 50000;
 	
 	//Properties
 	private String startHash = "";
@@ -299,7 +301,7 @@ public class BlockChain {
 			//Prompt user for data.
 			System.out.println("\nAccepted Inputs:");
 			System.out.println("C - Display each block with credit for the process that solves it");
-			System.out.println("R - (WIP) Read a new file to record (R <File Name>)");
+			System.out.println("R - Read a new file to record (R <File Name>)");
 			System.out.println("V - Verify Blocks");
 			System.out.println("L - (WIP) List committed information");
 			System.out.print("Input: ");
@@ -311,7 +313,7 @@ public class BlockChain {
 				//Handle Inputs
 				switch(input[0].toUpperCase()) {
 				case "C": viewLedger(state); break;
-				case "R": readFile(state, inStream); break;
+				case "R": readFile(state, input); break;
 				case "V": verifyLedger(state.ledger); break;
 				case "L": break;
 				default: System.out.println("\nUnsupported Command Provided..."); break;
@@ -325,26 +327,39 @@ public class BlockChain {
 		
 	}
 	
-	private static void readFile(ProcessState state, BufferedReader in) {
-		DataBlock block;
-		String input = "";
+	private static void readFile(ProcessState state, String [] args) throws IOException{
+		//Check the number of input arguments.
+		if (args.length < 2) throw new IOException("invallid # of elements");
 		
-		//TODO: Change to actually read a file.
-		
-		System.out.println();
-		System.out.print("Line to input: ");
-		
-		try {
-			input = in.readLine();
-		} catch (IOException e) {e.printStackTrace();}
-		
-		//Build the data block
-		block = new DataBlock(input);
-		
-		//TODO: Add Digital Signature
-		
-		//Contact ports to start solving process
-		contactPorts(state.unverifiedPort,0,state.totalPorts, block.toJson());
+		//Spawn file reader
+		try (BufferedReader reader = new BufferedReader(new FileReader(args[1]))){
+			
+			//build string command
+			StringBuilder sb = new StringBuilder("newBlocks ").append(state.portNum).append(' ');
+			StringBuilder jsonBlocks = new StringBuilder();
+			
+			int count = 0;
+			//read in blocks from file
+			String nextJSON = reader.readLine();
+			while (nextJSON != null) {
+				jsonBlocks.append(nextJSON).append('\n');
+				
+				//TODO: Add Digital Signature
+				
+				count++;
+				
+				nextJSON = reader.readLine();
+			}
+			
+			//Finish building message string
+			sb.append(count).append('\n');
+			sb.append(jsonBlocks);
+			
+			System.out.println(sb.toString());
+			
+			//Contact ports to start solving for blocks
+			contactPorts(state.unverifiedPort,0,state.totalPorts, sb.toString());
+		}
 	}
 	
 	private static void viewLedger(ProcessState state) {
@@ -571,14 +586,8 @@ class RequestListener extends Thread{
 				Socket sock = servsock.accept();
 				System.out.println("New request received");
 				
-				//Read & Parse Request.
-				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
-				DataBlock block = new Gson().fromJson(in.readLine(), DataBlock.class);
-				
 				//Start new thread.
-				new Solver(block, state).start();
-				
-				sock.close();
+				new Solver(sock, state).start();
 			}
 		} catch (IOException ioe) {ioe.printStackTrace();}
 		
@@ -594,13 +603,13 @@ class RequestListener extends Thread{
 class Solver extends Thread{
 	
 	//Properties
-	private DataBlock block;
+	private Socket sock;
 	private ProcessState state;
 	
 	//Constructor
-	public Solver(DataBlock block, ProcessState state) {
+	public Solver(Socket sock, ProcessState state) {
 		super();
-		this.block = block;
+		this.sock = sock;
 		this.state = state;
 	}
 
@@ -608,25 +617,46 @@ class Solver extends Thread{
 	@Override
 	public void run() {
 		
-		try {			
-			//Add the newest block to the queue
-			state.unsolved.add(block);
+		try {
+			//Read the socket connection (if there is one)
+			if (sock != null) {
+				ArrayList<DataBlock> newBlocks = readReqeust(sock);
+				sock.close();
+						
+				//Add the newest blocks to the queue
+				for (DataBlock block: newBlocks) {
+					//Add identifying information to block for the current processes
+					block.setSolver("Process " + state.portNum);
+					//Add to queue
+					state.unsolved.add(block);
+				}
+				
+			}
+
+			solveBlocks(); //Recursively solve blocks
 			
-			//If already processing a request just end here and let the other process handle it.
-			if (!state.solvingLock.tryAcquire()) return;
-			
+		} catch (Exception ex) {ex.printStackTrace();}
+	}
+	
+	/**Recursively solve blocks of data until there is nothing in the queue.
+	 * 
+	 */
+	private void solveBlocks() {
+		//If there is nothing in the queue terminate
+		if (state.unsolved.isEmpty()) return;
+		//If already processing a request just end here and let the other process handle it.
+		if (!state.solvingLock.tryAcquire()) return;
+		
+		System.out.println("Beginning solving cycle...");
+		
+		try {
 			//variables
 			Random randomizer = new Random();
-			int attempt = 1;
-			
-			//Add identifying information to block for the current processes
-			block.setSolver("Process " + state.portNum);
-			
-			//Notify Console of solution cycle
-			System.out.println("Solving for the below block:");
-			System.out.println(block.toJson());
+			long attempt = 1;
+			DataBlock block;
 			
 			while(true) {
+				
 				//Acquire semaphore lock
 				state.hashingLock.acquire();
 				
@@ -637,7 +667,6 @@ class Solver extends Thread{
 				block.setStartHash(state.getCurrentHash());
 				
 				//TODO: Add time to block.
-				
 				
 				//Randomize Block Seed
 				String randomString = Integer.toHexString(randomizer.nextInt(1000000));
@@ -663,17 +692,42 @@ class Solver extends Thread{
 			
 			//Inform indexed processes of discovered solution.
 			BlockChain.contactPorts(state.verifiedPort + state.portNum, 0, state.totalPorts, block.toJson());
-		
-		}catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
-		}catch (InterruptedException e) {
-			e.printStackTrace();
+			
+		}catch(Exception ex) {
+			ex.printStackTrace();
 		}finally {//Release locks even when exceptions happen
 			//Release hold on the semaphores
 			state.hashingLock.release();
 			state.solvingLock.release();
 		}
-	}	
+		
+		//Recurse
+		solveBlocks();
+	
+	}
+	
+	private ArrayList <DataBlock> readReqeust(Socket sock) throws IllegalArgumentException, IOException{
+		//Parameters
+		ArrayList<DataBlock> blocks = new ArrayList<DataBlock> ();
+		BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+		Gson gson = new Gson();
+
+		//Read first string or arguments
+		String [] args = in.readLine().split(" ");
+		
+		//Read remaining blocks into JSON
+		for (int i = 0; i < Integer.parseInt(args[2]); i++)
+			blocks.add(gson.fromJson(in.readLine(), DataBlock.class));
+		
+		//Console print lines
+		System.out.println("Received Blocks: ");
+		for (int i = 0; i < blocks.size(); i++)
+			System.out.println(blocks.get(i).toJson());
+		
+		//TODO: Validate signatures
+		
+		return blocks;
+	}
 }
 
 
