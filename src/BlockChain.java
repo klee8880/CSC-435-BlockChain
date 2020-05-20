@@ -32,11 +32,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.io.Reader;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SecureRandom;
 import java.util.Random;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
@@ -67,6 +70,7 @@ class DataBlock implements Comparable<DataBlock>{
 		super();
 		this.startHash = startHash;
 		this.data = data;
+		//Generate Public/Private Keys
 	}
 	public DataBlock(String data) {
 		super();
@@ -190,6 +194,10 @@ class ProcessState{
 	public PriorityBlockingQueue<DataBlock> unsolved;
 	public ArrayList<DataBlock> ledger;
 	
+	//Key Properties
+	private final String keyType = "RSA";
+	public final KeyPair localKeys = setKeys(); //Set the Keys. Separated from code block for simplicity. No user input needed.
+	
 	//Port Properties
 	public int portNum;
 	public int totalPorts;
@@ -198,12 +206,12 @@ class ProcessState{
 	public final int keyPort = 4710;
 	
 	//Hashing properties
-	public String hashType = "SHA-256";
+	public final String hashType = "SHA-256";
 	public Semaphore solvingLock = new Semaphore(1);
 	private int blockIndex;
 	
 	//Constructors
-	private ProcessState() {
+	private ProcessState() throws Exception {
 		super();
 		this.unsolved = new PriorityBlockingQueue <DataBlock> ();
 		this.ledger = new ArrayList <DataBlock> ();
@@ -211,9 +219,11 @@ class ProcessState{
 		//Set up first block
 		DataBlock block = new DataBlock("");
 		block.setEndHash("00000000000000000000");
+		block.setData("ROOT BLOCK: DUMMY DATA");
 		
 		//Add this data block as the first seed block for the 
 		ledger.add(block);
+
 	}
 
 	
@@ -233,8 +243,26 @@ class ProcessState{
 		return unsolved.poll();
 	}
 
+	/**setKeys
+	 * Set the public & private keys for this process
+	 * @throws NoSuchAlgorithmException 
+	 * @throws NoSuchProviderException 
+	 */
+	private KeyPair setKeys() throws Exception {
+		//Randomize seed
+		long seed = new Random().nextLong();
+		
+		//Key Pair generation
+		KeyPairGenerator generator = KeyPairGenerator.getInstance(keyType);
+		SecureRandom rng = SecureRandom.getInstance("SHA1PRNG","SUN");
+		rng.setSeed(seed);
+		generator.initialize(1024, rng);
+		
+		return generator.generateKeyPair();
+	}
+	
 	//Singleton requester
-	protected static ProcessState getInstance() {
+	protected static ProcessState getInstance() throws Exception {
 		if (instance == null) instance = new ProcessState();
 		return instance;
 	}
@@ -252,7 +280,13 @@ public class BlockChain {
 	
 	public static void main (String [] args) {
 		//Get the singleton process state shared between processes. 
-		ProcessState state = ProcessState.getInstance();
+		ProcessState state;
+		try {
+			state = ProcessState.getInstance();
+		} catch (Exception e1) {
+			e1.printStackTrace();
+			return;
+		}
 		
 		String[] input = {""};
 		BufferedReader inStream =  new BufferedReader(new InputStreamReader(System.in));
@@ -620,7 +654,7 @@ class Solver extends Thread{
 		try {
 			//Read the socket connection (if there is one)
 			if (sock != null) {
-				ArrayList<DataBlock> newBlocks = readReqeust(sock);
+				ArrayList<DataBlock> newBlocks = readRequest(sock);
 				sock.close();
 						
 				//Add the newest blocks to the queue
@@ -630,11 +664,9 @@ class Solver extends Thread{
 					//Add to queue
 					state.unsolved.add(block);
 				}
-				
 			}
 
 			solveBlocks(); //Recursively solve blocks
-			
 		} catch (Exception ex) {ex.printStackTrace();}
 	}
 	
@@ -706,7 +738,13 @@ class Solver extends Thread{
 	
 	}
 	
-	private ArrayList <DataBlock> readReqeust(Socket sock) throws IllegalArgumentException, IOException{
+	/**readRequest
+	 * @param sock
+	 * @return
+	 * @throws IllegalArgumentException
+	 * @throws IOException
+	 */
+	private ArrayList <DataBlock> readRequest(Socket sock) throws IllegalArgumentException, IOException{
 		//Parameters
 		ArrayList<DataBlock> blocks = new ArrayList<DataBlock> ();
 		BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
