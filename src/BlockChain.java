@@ -34,17 +34,24 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Random;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -197,6 +204,7 @@ class ProcessState{
 	//Key Properties
 	private final String keyType = "RSA";
 	public final KeyPair localKeys = setKeys(); //Set the Keys. Separated from code block for simplicity. No user input needed.
+	public final Map<Integer, PublicKey> keyList = new Hashtable<Integer, PublicKey>();;
 	
 	//Port Properties
 	public int portNum;
@@ -211,6 +219,7 @@ class ProcessState{
 	private int blockIndex;
 	
 	//Constructors
+	//Private constructor so it can't be built outside of the getInstance method
 	private ProcessState() throws Exception {
 		super();
 		this.unsolved = new PriorityBlockingQueue <DataBlock> ();
@@ -223,7 +232,6 @@ class ProcessState{
 		
 		//Add this data block as the first seed block for the 
 		ledger.add(block);
-
 	}
 
 	
@@ -233,14 +241,6 @@ class ProcessState{
 	
 	public String getCurrentHash() {
 		return this.ledger.get(ledger.size() - 1).getEndHash();
-	}
-	
-	/**getNextUnsolved
-	 * Return the next unsolved block of from the queue of unsolved requests
-	 * @return DataBlock or null if queue is empty
-	 */
-	public DataBlock getNextUnsolved() {
-		return unsolved.poll();
 	}
 
 	/**setKeys
@@ -278,7 +278,7 @@ public class BlockChain {
 	//Properties
 	Boolean solved = false;
 	
-	public static void main (String [] args) {
+	public static void main (String [] args) throws Exception {
 		//Get the singleton process state shared between processes. 
 		ProcessState state;
 		try {
@@ -318,6 +318,27 @@ public class BlockChain {
 	    	}
 	    }
 		
+		//Spawn semaphore for later
+		Semaphore gate = new Semaphore(1);
+		gate.acquire();
+		
+		//Spawn thread for waiting for key port notifications
+		new KeyListener(state, gate).start();
+		System.out.println("New Process Listener Thread Spawned...");
+		
+		//Prompt the user to start the program. Begins by transmitting it's public key to everyone.
+		System.out.println("Press (Enter) to begin Processing");
+		try {System.in.read();} catch (IOException e1) {
+			e1.printStackTrace();
+			return;
+		}
+		
+		//Notify other processes of your key
+		distributeKeys(state);
+		
+		//Wait for the key listener to collect the specified # of keys.
+		gate.acquire();
+		
 		//Splash Screen
 		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
 		System.out.println("Running as process #" + state.portNum + '\n');
@@ -327,8 +348,6 @@ public class BlockChain {
 		System.out.println("Requested Block Listener Thread Spawned...");
 		new CompleteListener(state).start();
 		System.out.println("Complete Block Listener Thread Spawned...");
-		
-		//TODO: Pause thread until all needed processes/keys
 		
 		//UI Loop
 		while (true) {
@@ -431,6 +450,29 @@ public class BlockChain {
 		
 	}
 	
+	/**distributeKeys
+	 * Distribute this processes' public key to all specified ports so they have record of how to handle incoming blocks
+	 * @param state
+	 */
+	private static void distributeKeys(ProcessState state) {
+		//Encode the message
+		StringBuilder sb = new StringBuilder().append(state.portNum).append(' ');
+		//Convert Key to string
+		byte[] byteKey = state.localKeys.getPublic().getEncoded();
+		String stringKey = Base64.getEncoder().encodeToString(byteKey);
+		sb.append(stringKey);
+		
+		System.out.println(sb.toString());
+		contactPorts(state.keyPort, 0, state.totalPorts, sb.toString());
+	}
+	
+	/**contactPorts
+	 * Contact all ports in the selection with the given message.
+	 * @param port
+	 * @param firstIndex
+	 * @param secIndex
+	 * @param message
+	 */
 	public static void contactPorts(int port, int firstIndex, int secIndex, String message) {
 		
 		Socket sock;
@@ -453,6 +495,69 @@ public class BlockChain {
 		}
 		
 	}
+}
+
+class KeyListener extends Thread{
+	//Static Vars
+	private static final int queueLength = 6;
+	
+	//Properties
+	private ProcessState state;
+	private Semaphore completionGate;
+	private int processCount = 0;
+	private KeyFactory decoder;
+	
+	public KeyListener(ProcessState state, Semaphore completionGate) throws NoSuchAlgorithmException {
+		super();
+		this.state = state;
+		this.completionGate = completionGate;
+		decoder = KeyFactory.getInstance("RSA");
+	}
+
+	@Override
+	public void run(){
+		//Open Port
+		try {
+			@SuppressWarnings("resource")
+			ServerSocket servsock = new ServerSocket(state.keyPort + state.portNum, queueLength);
+			
+			//Wait for a connection and handle
+			while (true) {
+				//process#/publicKey
+				//accept new connection
+				Socket sock = servsock.accept();
+				System.out.println("New process signing in");
+				
+				//Process request
+				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+				String[] args =  in.readLine().split(" ");
+				//Check correct # of arguments
+				if (args.length < 2) return;
+				
+				//Parse process #
+				int portNum = Integer.parseInt(args[0]);
+				//Parse Key
+				byte[] publicBytes = Base64.getDecoder().decode(args[1]);
+				X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(publicBytes);
+				PublicKey RestoredKey = decoder.generatePublic(pubSpec);
+				
+				//break if this key is already contained
+				if (state.keyList.containsKey(portNum)) return;
+				//Add new key if needed
+				state.keyList.put(portNum, RestoredKey);
+				//Increment saved keys
+				processCount++;
+				System.out.println("Total Processes: " + processCount);
+				
+				//If all keys are accounted for release main's gate and let it continue
+				if (processCount >= state.totalPorts) {
+					System.out.println("All processes accounted for");
+					completionGate.release();
+				}
+			}
+		} catch (Exception ioe) {ioe.printStackTrace();}
+	}
+	
 }
 
 /**
