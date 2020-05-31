@@ -1,0 +1,332 @@
+-----------------PROCESS 0----------------
+
+New Process Listener Thread Spawned...
+Press (Enter) to begin Processing
+
+0 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCoyCn5gFDS35/8eoNwP5StB7TSBbqCWJOxE3ZxtBnjloVKv1QqF/ySz0C9o+HVKWR0TVeaP7VjW4qcs4BE+TzcgIlcfKMmaYesYQB9y+FwIVdz2kQZk0hNpvNqcM90T+VV6wLKIn6cibeUS2maRlx92qYOXEwWEWqu+tTDNPmhgQIDAQAB
+Contacting: 4710
+New process signing in
+Contacting: 4711
+Contacting: 4712
+Total Processes: 1
+New process signing in
+Total Processes: 2
+New process signing in
+Total Processes: 3
+All processes accounted for
+Now running Kevin Lee's Block Chain Application v.05
+Running as process #0
+
+Requested Block Listener Thread Spawned...
+Complete Block Listener Thread Spawned...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: 
+Unsupported Command Provided...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: New request received
+Received Blocks: 
+{  "startHash": "",  "data": "First",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Second",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Third",  "solver": "",  "randomSeed": "",  "endHash": ""}
+Beginning solving cycle...
+New completed block received
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+Solution found on attempt #(5009757): c4af3d3334815c6baf3a5c654fc0266507d2788c7658664294cccb9200000b75
+Contacting: 4930
+New completed block received
+Contacting: 4931
+Contacting: 4932
+Beginning solving cycle...
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+New completed block received
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+V
+Blocks verified: 4 of 4
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: 
+
+-----------------PROCESS 1----------------
+
+C:\Users\klee8\Desktop\BlockChain>java -cp "gson-2.8.2.jar"; BlockChain 2
+New Process Listener Thread Spawned...
+Press (Enter) to begin Processing
+New process signing in
+Total Processes: 1
+New process signing in
+Total Processes: 2
+
+2 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCsJKrsQcHvVNsPRLFiLqlXlXDcyqFwCcmDbQ8A2AxNTAfaWytWW/gJ/v2VQj/4I/PzRHkRaZpTqrlA7VGN75WhRbN7g2cvjJ7K2Y7e7trMOM0j04pmzlANJqGVZVKO326fXWSiZGHqKtCIaQ3C7ztVMhpVU9xz/VevbStqTBc6IwIDAQAB
+Contacting: 4710
+Contacting: 4711
+Contacting: 4712
+New process signing in
+Total Processes: 3
+All processes accounted for
+Now running Kevin Lee's Block Chain Application v.05
+Running as process #2
+
+Requested Block Listener Thread Spawned...
+Complete Block Listener Thread Spawned...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input:
+Unsupported Command Provided...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: R BlockInput0.txt
+newBlocks 2 3
+{  "startHash": "",  "data": "First",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Second",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Third",  "solver": "",  "randomSeed": "",  "endHash": ""}
+
+Contacting: 4820
+Contacting: 4821
+Contacting: 4822
+New request received
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: Received Blocks:
+{  "startHash": "",  "data": "First",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Second",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Third",  "solver": "",  "randomSeed": "",  "endHash": ""}
+Beginning solving cycle...
+New completed block received
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+New completed block received
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+Solution found on attempt #(5939628): 2dcbebdb735c9901afcdc5b3454229cceee5b3843c80f3e1242d11b20000072d
+Contacting: 4930
+Contacting: 4931
+Contacting: 4932
+New completed block received
+Beginning solving cycle...
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+
+
+Unsupported Command Provided...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: c
+
+Number of Blocks: 4
+
+DEFAULT, {  "startHash": "",  "data": "ROOT BLOCK: DUMMY DATA",  "solver": "DEFAULT",  "randomSeed": "",  "endHash": "00000000000000000000"}
+
+Process 1, {  "startHash": "00000000000000000000",  "data": "First",  "solver": "Process 1",  "randomSeed": "a9053",  "endHash": "2e0e279dfa0850bf5b370ca6f25ddc1a22d5961dbb54e0d20bd177b100000039"}
+
+Process 0, {  "startHash": "2e0e279dfa0850bf5b370ca6f25ddc1a22d5961dbb54e0d20bd177b100000039",  "data": "Second",  "solver": "Process 0",  "randomSeed": "7fafe",  "endHash": "c4af3d3334815c6baf3a5c654fc0266507d2788c7658664294cccb9200000b75"}
+
+Process 2, {  "startHash": "c4af3d3334815c6baf3a5c654fc0266507d2788c7658664294cccb9200000b75",  "data": "Third",  "solver": "Process 2",  "randomSeed": "58a46",  "endHash": "2dcbebdb735c9901afcdc5b3454229cceee5b3843c80f3e1242d11b20000072d"}
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: l
+
+Number of Blocks: 4
+
+DEFAULT, ROOT BLOCK: DUMMY DATA
+
+Process 1, First
+
+Process 0, Second
+
+Process 2, Third
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: V
+Blocks verified: 4 of 4
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: Exception in thread "main" java.lang.NullPointerException
+C:\Users\klee8\Desktop\BlockChain>
+
+-----------------PROCESS 2----------------
+
+C:\Users\klee8\Desktop\BlockChain>java -cp "gson-2.8.2.jar"; BlockChain 2
+New Process Listener Thread Spawned...
+Press (Enter) to begin Processing
+New process signing in
+Total Processes: 1
+New process signing in
+Total Processes: 2
+
+2 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCsJKrsQcHvVNsPRLFiLqlXlXDcyqFwCcmDbQ8A2AxNTAfaWytWW/gJ/v2VQj/4I/PzRHkRaZpTqrlA7VGN75WhRbN7g2cvjJ7K2Y7e7trMOM0j04pmzlANJqGVZVKO326fXWSiZGHqKtCIaQ3C7ztVMhpVU9xz/VevbStqTBc6IwIDAQAB
+Contacting: 4710
+Contacting: 4711
+Contacting: 4712
+New process signing in
+Total Processes: 3
+All processes accounted for
+Now running Kevin Lee's Block Chain Application v.05
+Running as process #2
+
+Requested Block Listener Thread Spawned...
+Complete Block Listener Thread Spawned...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input:
+Unsupported Command Provided...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: R BlockInput0.txt
+newBlocks 2 3
+{  "startHash": "",  "data": "First",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Second",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Third",  "solver": "",  "randomSeed": "",  "endHash": ""}
+
+Contacting: 4820
+Contacting: 4821
+Contacting: 4822
+New request received
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: Received Blocks:
+{  "startHash": "",  "data": "First",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Second",  "solver": "",  "randomSeed": "",  "endHash": ""}
+{  "startHash": "",  "data": "Third",  "solver": "",  "randomSeed": "",  "endHash": ""}
+Beginning solving cycle...
+New completed block received
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+New completed block received
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+Solution found on attempt #(5939628): 2dcbebdb735c9901afcdc5b3454229cceee5b3843c80f3e1242d11b20000072d
+Contacting: 4930
+Contacting: 4931
+Contacting: 4932
+New completed block received
+Beginning solving cycle...
+SUCCESS: Hash requirments met
+SUCCESS: Hash matches provided
+SUCCESS: Hash matches the current ledger
+SUCCESS: Block located
+
+
+Unsupported Command Provided...
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: c
+
+Number of Blocks: 4
+
+DEFAULT, {  "startHash": "",  "data": "ROOT BLOCK: DUMMY DATA",  "solver": "DEFAULT",  "randomSeed": "",  "endHash": "00000000000000000000"}
+
+Process 1, {  "startHash": "00000000000000000000",  "data": "First",  "solver": "Process 1",  "randomSeed": "a9053",  "endHash": "2e0e279dfa0850bf5b370ca6f25ddc1a22d5961dbb54e0d20bd177b100000039"}
+
+Process 0, {  "startHash": "2e0e279dfa0850bf5b370ca6f25ddc1a22d5961dbb54e0d20bd177b100000039",  "data": "Second",  "solver": "Process 0",  "randomSeed": "7fafe",  "endHash": "c4af3d3334815c6baf3a5c654fc0266507d2788c7658664294cccb9200000b75"}
+
+Process 2, {  "startHash": "c4af3d3334815c6baf3a5c654fc0266507d2788c7658664294cccb9200000b75",  "data": "Third",  "solver": "Process 2",  "randomSeed": "58a46",  "endHash": "2dcbebdb735c9901afcdc5b3454229cceee5b3843c80f3e1242d11b20000072d"}
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: l
+
+Number of Blocks: 4
+
+DEFAULT, ROOT BLOCK: DUMMY DATA
+
+Process 1, First
+
+Process 0, Second
+
+Process 2, Third
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: V
+Blocks verified: 4 of 4
+
+Accepted Inputs:
+C - Display each block with credit for the process that solves it
+R - Read a new file to record (R <File Name>)
+V - Verify Blocks
+L - List committed information
+Input: Exception in thread "main" java.lang.NullPointerException
+C:\Users\klee8\Desktop\BlockChain>

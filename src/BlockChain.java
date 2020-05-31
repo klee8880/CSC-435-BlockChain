@@ -8,13 +8,17 @@ build 1.8.0_161
 
 3. Precise command-line compilation examples / instructions:
 
-> javac BlockChain.java
+> javac -cp "gson-2.8.2.jar" *.java run twice in a directory with the supporting gson jar file
 
 4. Precise examples / instructions to run this program:
 
 In separate shell windows or computers:
 
-> java BlockChain #
+> java -cp "gson-2.8.2.jar"; BlockChain a b
+	a == this process # (Optional: Defaults to 0)
+	b == total processes (Optional: Defaults to 3)
+	
+Start all three programs first then press enter in all three to send information to each other.
 
 All acceptable commands are displayed on the various consoles.
 
@@ -63,7 +67,7 @@ import com.google.gson.GsonBuilder;
  */
 class DataBlock implements Comparable<DataBlock>{
 	//Used by other processes to know how many lines to look for in a stream.
-	public static final int requirement = 50000;
+	public static final int requirement = 4000;
 	
 	//Properties
 	private String startHash = "";
@@ -180,7 +184,7 @@ class DataBlock implements Comparable<DataBlock>{
 	 */
 	@Override
 	public int compareTo(DataBlock o) {
-		return 0;
+		return this.data.compareTo(o.data);
 	}
 }
 
@@ -340,7 +344,7 @@ public class BlockChain {
 		gate.acquire();
 		
 		//Splash Screen
-		System.out.println("Now running Kevin Lee's Block Chain Application v.01");
+		System.out.println("Now running Kevin Lee's Block Chain Application v.05");
 		System.out.println("Running as process #" + state.portNum + '\n');
 		
 		//Spawn secondary processes Thread(s).
@@ -356,7 +360,7 @@ public class BlockChain {
 			System.out.println("C - Display each block with credit for the process that solves it");
 			System.out.println("R - Read a new file to record (R <File Name>)");
 			System.out.println("V - Verify Blocks");
-			System.out.println("L - (WIP) List committed information");
+			System.out.println("L - List committed information");
 			System.out.print("Input: ");
 			
 			//Read in data to be encoded.
@@ -368,7 +372,7 @@ public class BlockChain {
 				case "C": viewLedger(state); break;
 				case "R": readFile(state, input); break;
 				case "V": verifyLedger(state.ledger); break;
-				case "L": break;
+				case "L": listLedger(state); break;
 				default: System.out.println("\nUnsupported Command Provided..."); break;
 				}
 				
@@ -427,7 +431,19 @@ public class BlockChain {
 		}
 	}
 	
-	public static void verifyLedger(List <DataBlock> ledger) {
+	private static void listLedger(ProcessState state) {
+		//For each entry in the ledger print a line
+		System.out.println();
+		System.out.println("Number of Blocks: " + state.ledger.size());
+		
+		//For each loop to print out each line of the ledger
+		for (DataBlock block: state.ledger) {
+			System.out.println();
+			System.out.println(block.getSolver() + ", " + block.getData());
+		}
+	}
+	
+	private static void verifyLedger(List <DataBlock> ledger) {
 		DataBlock previous = null;
 		int verified = ledger.size();
 		
@@ -483,6 +499,7 @@ public class BlockChain {
 			//Contact all remote sockets and ask for a solution
 			try {
 				//Acquire next port
+				System.out.println("Contacting: " + (port + firstIndex));
 				sock = new Socket("localhost", port + firstIndex);
 				toStream = new PrintStream(sock.getOutputStream());
 				
@@ -609,6 +626,7 @@ class BlockAdder extends Thread{
 	//Properties
 	ProcessState state;
 	DataBlock block;
+	private static Semaphore gate = new Semaphore(1);
 
 	//Constructor
 	public BlockAdder(ProcessState state, DataBlock block) {
@@ -620,21 +638,18 @@ class BlockAdder extends Thread{
 	@Override
 	public void run() {
 		
-		//Acquire semaphore lock
-		try {state.hashingLock.acquire();} catch (InterruptedException e1) {
-			e1.printStackTrace();
-			return;
-		}
-
-		//Check if the hash is valid
-		if (!block.checkHash()) {
-			System.out.println("FAILURE: Block's end hash does not match requirement");
-			state.hashingLock.release();
-			return;
-		}
-		System.out.println("SUCCESS: Hash requirments met");
-		
 		try {
+			//Acquire semaphore locks
+			state.hashingLock.acquire();// Stop processing of next block
+			gate.acquire();//Stop processing of any other completed blocks
+
+			//Check if the hash is valid
+			if (!block.checkHash()) {
+				System.out.println("FAILURE: Block's end hash does not match requirement");
+				state.hashingLock.release();
+				return;
+			}
+			System.out.println("SUCCESS: Hash requirments met");
 			
 			//Rehash block and compare 
 			String newHash = block.generateHash(state.hashType);
@@ -656,16 +671,37 @@ class BlockAdder extends Thread{
 			}
 			System.out.println("SUCCESS: Hash matches the current ledger");
 			
+			//TODO: Check if the block is still on the queue
+			boolean found = false;
+			for (DataBlock b: state.unsolved) {
+				if (b.getData().equals(block.getData())) {
+					state.unsolved.remove(b);
+					found = true;
+				}
+			}
+			
+			if (!found) {
+				System.out.println("Failure: Block not in ledger");
+				return;
+			}
+			else {
+				System.out.println("SUCCESS: Block located");
+			}
+			
 			//Update the ledger
 			state.ledger.add(block);
 			
 			//Rewrite data file if you are process 0
 			if (state.portNum == 0) writeJSONFile("BlockchainLedger.json", state.ledger);
-			
-			//release semaphore lock
-			state.hashingLock.release();
 		
-		} catch (NoSuchAlgorithmException e) {e.printStackTrace();}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		finally {
+			//release semaphore lock no matter what to avoid process locking out.
+			state.hashingLock.release();
+			gate.release();
+		}
 		
 
 	}
@@ -800,6 +836,8 @@ class Solver extends Thread{
 				//acquire the correct block from the list.
 				block = state.unsolved.peek();
 				
+				if (block == null) return;
+				
 				//Update start hash in case newest locked block has changed
 				block.setStartHash(state.getCurrentHash());
 				
@@ -822,13 +860,13 @@ class Solver extends Thread{
 			}
 			
 			//Remove the now solved block
-			state.unsolved.remove(block);
+			//state.unsolved.remove(block);
 			
 			//Print to console
 			System.out.println("Solution found on attempt #(" + attempt + "): " + block.getEndHash());
 			
 			//Inform indexed processes of discovered solution.
-			BlockChain.contactPorts(state.verifiedPort + state.portNum, 0, state.totalPorts, block.toJson());
+			BlockChain.contactPorts(state.verifiedPort, 0, state.totalPorts, block.toJson());
 			
 		}catch(Exception ex) {
 			ex.printStackTrace();

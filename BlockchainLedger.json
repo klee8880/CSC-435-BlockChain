@@ -1,25 +1,25 @@
 {
   "startHash": "",
-  "data": "",
+  "data": "ROOT BLOCK: DUMMY DATA",
   "solver": "DEFAULT",
   "randomSeed": "",
   "endHash": "00000000000000000000"
 }{
   "startHash": "00000000000000000000",
   "data": "First",
-  "solver": "Process 0",
-  "randomSeed": "d6b30",
-  "endHash": "bd6be7f66a022ba1dce26c1d9e91007bbcbd0287b7541a0a7d5d830900001488"
+  "solver": "Process 1",
+  "randomSeed": "a9053",
+  "endHash": "2e0e279dfa0850bf5b370ca6f25ddc1a22d5961dbb54e0d20bd177b100000039"
 }{
-  "startHash": "bd6be7f66a022ba1dce26c1d9e91007bbcbd0287b7541a0a7d5d830900001488",
-  "data": "Third",
-  "solver": "Process 0",
-  "randomSeed": "debba",
-  "endHash": "ee03be9fd844cbb4c4030ea2afd2bca67542f98314d2a32f6dff5fa700006b07"
-}{
-  "startHash": "ee03be9fd844cbb4c4030ea2afd2bca67542f98314d2a32f6dff5fa700006b07",
+  "startHash": "2e0e279dfa0850bf5b370ca6f25ddc1a22d5961dbb54e0d20bd177b100000039",
   "data": "Second",
   "solver": "Process 0",
-  "randomSeed": "98b11",
-  "endHash": "e50ba5ddaafb8900f2f6fed4cc423ae520a816f648a189c89b0170c000003a67"
+  "randomSeed": "7fafe",
+  "endHash": "c4af3d3334815c6baf3a5c654fc0266507d2788c7658664294cccb9200000b75"
+}{
+  "startHash": "c4af3d3334815c6baf3a5c654fc0266507d2788c7658664294cccb9200000b75",
+  "data": "Third",
+  "solver": "Process 2",
+  "randomSeed": "58a46",
+  "endHash": "2dcbebdb735c9901afcdc5b3454229cceee5b3843c80f3e1242d11b20000072d"
 }
